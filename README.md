@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/matthiaseinig/Homebridge-EVCC/main/assets/icon.jpeg" alt="EVCC" width="160" />
+</p>
+
 # Homebridge-EVCC
 
 <p align="center">
