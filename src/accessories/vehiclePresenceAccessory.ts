@@ -1,5 +1,6 @@
 import type { API, Logging, PlatformAccessory, Service, WithUUID } from "homebridge";
 import type { LoadpointState, VehicleState } from "../api/types.js";
+import { applyServiceName } from "../util/applyServiceName.js";
 
 export interface VehiclePresenceDeps {
   api: API;
@@ -47,8 +48,11 @@ export class VehiclePresenceAccessory {
 
   applyVehicleUpdate(vehicle: VehicleState): void {
     this.vehicle = { ...this.vehicle, ...vehicle };
-    const C = this.api.hap.Characteristic;
-    this.occupancyService.setCharacteristic(C.Name, this.displayName());
+    applyServiceName(
+      this.occupancyService,
+      this.displayName(),
+      this.api.hap.Characteristic,
+    );
   }
 
   get name(): string | undefined {
@@ -88,8 +92,7 @@ export class VehiclePresenceAccessory {
     ).services;
     const existing = services.find((s) => s.UUID === ctor.UUID && s.subtype === subtype);
     const svc = existing ?? this.accessory.addService(ctor, name, subtype);
-    const C = this.api.hap.Characteristic;
-    svc.setCharacteristic(C.Name, name);
+    applyServiceName(svc, name, this.api.hap.Characteristic);
     return svc;
   }
 }

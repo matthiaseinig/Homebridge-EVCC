@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SiteAccessory = void 0;
+const applyServiceName_js_1 = require("../util/applyServiceName.js");
 const powerToLux_js_1 = require("../util/powerToLux.js");
 const SUBTYPE_BATTERY = "home-battery";
 const SUBTYPE_PV = "pv-power";
@@ -139,16 +140,7 @@ class SiteAccessory {
         const services = this.accessory.services;
         const existing = services.find((s) => s.UUID === ctor.UUID && s.subtype === subtype);
         const svc = existing ?? this.accessory.addService(ctor, name, subtype);
-        const C = this.api.hap.Characteristic;
-        svc.setCharacteristic(C.Name, name);
-        if (C.ConfiguredName) {
-            try {
-                svc.setCharacteristic(C.ConfiguredName, name);
-            }
-            catch {
-                // Skipped on HAP versions without ConfiguredName.
-            }
-        }
+        (0, applyServiceName_js_1.applyServiceName)(svc, name, this.api.hap.Characteristic);
         return svc;
     }
 }

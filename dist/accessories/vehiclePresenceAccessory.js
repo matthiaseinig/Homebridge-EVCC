@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.VehiclePresenceAccessory = void 0;
+const applyServiceName_js_1 = require("../util/applyServiceName.js");
 const SUBTYPE_OCCUPANCY = "vehicle-presence";
 /**
  * Per-vehicle presence accessory. Fires when the vehicle is currently assigned
@@ -29,8 +30,7 @@ class VehiclePresenceAccessory {
     }
     applyVehicleUpdate(vehicle) {
         this.vehicle = { ...this.vehicle, ...vehicle };
-        const C = this.api.hap.Characteristic;
-        this.occupancyService.setCharacteristic(C.Name, this.displayName());
+        (0, applyServiceName_js_1.applyServiceName)(this.occupancyService, this.displayName(), this.api.hap.Characteristic);
     }
     get name() {
         return this.vehicle.name;
@@ -57,8 +57,7 @@ class VehiclePresenceAccessory {
         const services = this.accessory.services;
         const existing = services.find((s) => s.UUID === ctor.UUID && s.subtype === subtype);
         const svc = existing ?? this.accessory.addService(ctor, name, subtype);
-        const C = this.api.hap.Characteristic;
-        svc.setCharacteristic(C.Name, name);
+        (0, applyServiceName_js_1.applyServiceName)(svc, name, this.api.hap.Characteristic);
         return svc;
     }
 }

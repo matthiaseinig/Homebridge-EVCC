@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LoadpointAccessory = void 0;
+const applyServiceName_js_1 = require("../util/applyServiceName.js");
 const powerToLux_js_1 = require("../util/powerToLux.js");
 const SUBTYPE_OUTLET = "outlet";
 const SUBTYPE_LIMIT_LP = "limit-loadpoint";
@@ -202,16 +203,7 @@ class LoadpointAccessory {
         const services = this.accessory.services;
         const existing = services.find((s) => s.UUID === ctor.UUID && s.subtype === subtype);
         const svc = existing ?? this.accessory.addService(ctor, name, subtype);
-        const C = this.api.hap.Characteristic;
-        svc.setCharacteristic(C.Name, name);
-        if (C.ConfiguredName) {
-            try {
-                svc.setCharacteristic(C.ConfiguredName, name);
-            }
-            catch {
-                // Characteristic.ConfiguredName isn't on every HAP version — fine to skip.
-            }
-        }
+        (0, applyServiceName_js_1.applyServiceName)(svc, name, this.api.hap.Characteristic);
         return svc;
     }
     async safeSetMode(mode) {

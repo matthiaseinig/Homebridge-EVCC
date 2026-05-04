@@ -1,6 +1,7 @@
 import type { API, Logging, PlatformAccessory, Service, WithUUID } from "homebridge";
 import type { EvccClient } from "../api/client.js";
 import type { ChargeMode, LoadpointState } from "../api/types.js";
+import { applyServiceName } from "../util/applyServiceName.js";
 import { clampPercent, powerToLux } from "../util/powerToLux.js";
 
 export type LoadpointModeUi = "outlet" | "switches" | "readonly";
@@ -284,15 +285,7 @@ export class LoadpointAccessory {
     ).services;
     const existing = services.find((s) => s.UUID === ctor.UUID && s.subtype === subtype);
     const svc = existing ?? this.accessory.addService(ctor, name, subtype);
-    const C = this.api.hap.Characteristic;
-    svc.setCharacteristic(C.Name, name);
-    if (C.ConfiguredName) {
-      try {
-        svc.setCharacteristic(C.ConfiguredName, name);
-      } catch {
-        // Characteristic.ConfiguredName isn't on every HAP version — fine to skip.
-      }
-    }
+    applyServiceName(svc, name, this.api.hap.Characteristic);
     return svc;
   }
 

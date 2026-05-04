@@ -8,6 +8,25 @@ Version bumps and entries below are managed by
 [release-please](https://github.com/googleapis/release-please) on every push to
 `main`.
 
+## [1.0.0] - 2026-05-04
+
+### Added
+- Service-name pinning via `applyServiceName` helper: each service now sets
+  `displayName`, the `Name` characteristic, and (where supported) the
+  `ConfiguredName` characteristic with a no-op `onSet` handler that swallows
+  iOS's pairing-dialog overwrites. This stops the Home app from renaming
+  sensors back to generic labels like "Sensor", "Switch", or "Outlet" after
+  pairing, so the descriptive labels (e.g. "Garage Charge Limit", "PV
+  Production") survive across re-pairings.
+
+### Changed
+- Switched plugin loader output to CommonJS (`module: CommonJS`,
+  `moduleResolution: Node`, `export =`) so that Homebridge's `require()`-based
+  plugin scanner can load the package on hb-service installs.
+- Dropped the `prepare: tsc` install hook and started shipping pre-built
+  `dist/` in the repository, so `npm install -g <git-url>` works on Homebridge
+  hosts that don't expose `tsc` on PATH during npm's nested install step.
+
 ## [0.1.0] - 2026-05-04
 
 ### Added

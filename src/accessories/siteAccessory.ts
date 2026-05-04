@@ -1,6 +1,7 @@
 import type { API, Logging, PlatformAccessory, Service, WithUUID } from "homebridge";
 import type { EvccClient } from "../api/client.js";
 import type { BatteryMode, EvccState } from "../api/types.js";
+import { applyServiceName } from "../util/applyServiceName.js";
 import { clampPercent, powerToLux } from "../util/powerToLux.js";
 
 export interface SiteAccessoryDeps {
@@ -209,15 +210,7 @@ export class SiteAccessory {
     ).services;
     const existing = services.find((s) => s.UUID === ctor.UUID && s.subtype === subtype);
     const svc = existing ?? this.accessory.addService(ctor, name, subtype);
-    const C = this.api.hap.Characteristic;
-    svc.setCharacteristic(C.Name, name);
-    if (C.ConfiguredName) {
-      try {
-        svc.setCharacteristic(C.ConfiguredName, name);
-      } catch {
-        // Skipped on HAP versions without ConfiguredName.
-      }
-    }
+    applyServiceName(svc, name, this.api.hap.Characteristic);
     return svc;
   }
 }
