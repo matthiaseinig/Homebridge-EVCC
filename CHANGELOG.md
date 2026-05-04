@@ -8,6 +8,19 @@ Version bumps and entries below are managed by
 [release-please](https://github.com/googleapis/release-please) on every push to
 `main`.
 
+## [0.2.0](https://github.com/matthiaseinig/Homebridge-EVCC/compare/v0.1.0...v0.2.0) (2026-05-04)
+
+
+### Features
+
+* initial release of homebridge-evcc ([ef8dd8d](https://github.com/matthiaseinig/Homebridge-EVCC/commit/ef8dd8dc17e5f15b18e69cb16f207f5574e12532))
+
+
+### Bug Fixes
+
+* **install:** ship pre-built dist and drop prepare hook ([c333226](https://github.com/matthiaseinig/Homebridge-EVCC/commit/c333226a9cced8d1bd0533d620103653adaeef33))
+* **loader:** emit CommonJS so Homebridge can require() the plugin ([8089ab5](https://github.com/matthiaseinig/Homebridge-EVCC/commit/8089ab5337afc50c37cd56be27c42c645adbb91b))
+
 ## [0.1.0] - 2026-05-04
 
 ### Added
