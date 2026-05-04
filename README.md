@@ -27,13 +27,16 @@ It exposes everything EVCC knows about your home as native HomeKit accessories: 
 
 ## Quick start
 
-1. Install the plugin via the Homebridge UI (search **EVCC**) or:
+1. Install the plugin. The plugin is not yet on npm — install it directly from GitHub instead:
    ```sh
-   sudo npm install -g homebridge-evcc
+   sudo npm install -g matthiaseinig/Homebridge-EVCC
    ```
-2. Open the plugin settings and enter your EVCC base URL, e.g. `http://evcc.local:7070`.
+   Once the first npm release lands, `sudo npm install -g homebridge-evcc` (or installing from the Homebridge UI) will work too.
+2. Open the plugin settings in the Homebridge UI and enter your EVCC base URL, e.g. `http://evcc.local:7070`.
 3. (Optional) Enter the EVCC admin password — required only if you want to drive controls (charge limit, mode, battery mode) from HomeKit. Without it the plugin runs read-only.
 4. Save and restart Homebridge.
+
+> The Git-based install builds the TypeScript sources locally via the package's `prepare` hook; you'll need the same Node version Homebridge runs on.
 
 ## Configuration
 
