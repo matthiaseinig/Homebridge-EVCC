@@ -1,8 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.splitPath = splitPath;
+exports.applyUpdate = applyUpdate;
+exports.parseFrame = parseFrame;
+exports.asLoadpointArray = asLoadpointArray;
 /**
  * Walk a dotted key path on `state` and return the array of segments. Numeric
  * segments are coerced to numbers so consumers can branch on array vs object.
  */
-export function splitPath(key) {
+function splitPath(key) {
     return key.split(".").map((s) => (/^\d+$/.test(s) ? Number(s) : s));
 }
 /**
@@ -15,7 +21,7 @@ export function splitPath(key) {
  *  - whole loadpoint:    {"loadpoints.0": {...}}                   → state.loadpoints[0] = {...}
  *  - whole loadpoints:   {"loadpoints": [...]}                     → state.loadpoints = [...]
  */
-export function applyUpdate(state, update) {
+function applyUpdate(state, update) {
     const path = splitPath(update.key);
     const touched = new Set();
     if (path.length === 0)
@@ -50,7 +56,7 @@ export function applyUpdate(state, update) {
  * more keys per frame). Returns an array of normalized updates. Malformed
  * frames return an empty array — callers should log and ignore.
  */
-export function parseFrame(raw) {
+function parseFrame(raw) {
     let parsed;
     try {
         parsed = JSON.parse(typeof raw === "string" ? raw : raw.toString("utf-8"));
@@ -64,7 +70,7 @@ export function parseFrame(raw) {
     return Object.entries(obj).map(([key, value]) => ({ key, value }));
 }
 /** Narrow an unknown into a LoadpointState[] (best-effort, never throws). */
-export function asLoadpointArray(v) {
+function asLoadpointArray(v) {
     if (!Array.isArray(v))
         return [];
     return v.filter((x) => !!x && typeof x === "object");

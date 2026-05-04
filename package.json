@@ -22,7 +22,6 @@
   "bugs": {
     "url": "https://github.com/matthiaseinig/Homebridge-EVCC/issues"
   },
-  "type": "module",
   "main": "dist/index.js",
   "engines": {
     "node": ">=18.20.0",

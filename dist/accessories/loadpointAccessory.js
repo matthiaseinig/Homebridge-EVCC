@@ -1,4 +1,7 @@
-import { clampPercent, powerToLux } from "../util/powerToLux.js";
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.LoadpointAccessory = void 0;
+const powerToLux_js_1 = require("../util/powerToLux.js");
 const SUBTYPE_OUTLET = "outlet";
 const SUBTYPE_LIMIT_LP = "limit-loadpoint";
 const SUBTYPE_LIMIT_VEHICLE = "limit-vehicle";
@@ -25,7 +28,7 @@ const SWITCH_MODES = ["now", "pv", "minpv"];
  *   - LightSensor       "<title> Power"             CurrentAmbientLightLevel = chargePower (W → lux)
  *   - Switch ×3         "<title> Now"/"PV"/"Min+PV" optional, when modeUi = "switches"
  */
-export class LoadpointAccessory {
+class LoadpointAccessory {
     api;
     log;
     client;
@@ -66,19 +69,19 @@ export class LoadpointAccessory {
             this.outletService.updateCharacteristic(C.OutletInUse, !!this.state.connected);
         }
         if (this.limitLoadpointService) {
-            const target = clampPercent(this.state.limitSoc);
-            const current = clampPercent(this.state.vehicleSoc);
+            const target = (0, powerToLux_js_1.clampPercent)(this.state.limitSoc);
+            const current = (0, powerToLux_js_1.clampPercent)(this.state.vehicleSoc);
             this.limitLoadpointService.updateCharacteristic(C.TargetPosition, target);
             this.limitLoadpointService.updateCharacteristic(C.CurrentPosition, current);
             this.limitLoadpointService.updateCharacteristic(C.PositionState, 2 /* STOPPED */);
         }
         if (this.batteryService) {
-            this.batteryService.updateCharacteristic(C.BatteryLevel, clampPercent(this.state.vehicleSoc));
+            this.batteryService.updateCharacteristic(C.BatteryLevel, (0, powerToLux_js_1.clampPercent)(this.state.vehicleSoc));
             this.batteryService.updateCharacteristic(C.ChargingState, this.state.charging ? 1 : 0);
-            this.batteryService.updateCharacteristic(C.StatusLowBattery, clampPercent(this.state.vehicleSoc) < 20 ? 1 : 0);
+            this.batteryService.updateCharacteristic(C.StatusLowBattery, (0, powerToLux_js_1.clampPercent)(this.state.vehicleSoc) < 20 ? 1 : 0);
         }
         if (this.powerService) {
-            this.powerService.updateCharacteristic(C.CurrentAmbientLightLevel, powerToLux(this.state.chargePower));
+            this.powerService.updateCharacteristic(C.CurrentAmbientLightLevel, (0, powerToLux_js_1.powerToLux)(this.state.chargePower));
         }
         for (const [mode, svc] of this.modeSwitches) {
             svc.updateCharacteristic(C.On, this.state.mode === mode);
@@ -237,4 +240,5 @@ export class LoadpointAccessory {
         }
     }
 }
+exports.LoadpointAccessory = LoadpointAccessory;
 //# sourceMappingURL=loadpointAccessory.js.map

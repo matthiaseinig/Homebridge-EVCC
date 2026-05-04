@@ -1,9 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.redactSecret = redactSecret;
 /**
  * Format a secret for log output without leaking it. Returns `"(none)"` for
  * empty values, the first 2 chars + `***` for short strings, otherwise the
  * first 4 chars + `***` + the last 2.
  */
-export function redactSecret(value) {
+function redactSecret(value) {
     if (!value)
         return "(none)";
     if (value.length <= 4)

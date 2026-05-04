@@ -1,3 +1,8 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.HOMEKIT_LUX_MAX = exports.HOMEKIT_LUX_MIN = void 0;
+exports.powerToLux = powerToLux;
+exports.clampPercent = clampPercent;
 /**
  * Map an arbitrary power value (watts) onto a HomeKit `CurrentAmbientLightLevel`
  * characteristic, which is constrained to `[0.0001, 100000]` lux. We keep the
@@ -10,21 +15,21 @@
  * a separate ContactSensor on the same accessory so the Home app can drive
  * automations off "exporting to grid" cleanly.
  */
-export const HOMEKIT_LUX_MIN = 0.0001;
-export const HOMEKIT_LUX_MAX = 100000;
-export function powerToLux(watts) {
+exports.HOMEKIT_LUX_MIN = 0.0001;
+exports.HOMEKIT_LUX_MAX = 100000;
+function powerToLux(watts) {
     if (watts === undefined || watts === null || !Number.isFinite(watts)) {
-        return HOMEKIT_LUX_MIN;
+        return exports.HOMEKIT_LUX_MIN;
     }
     const abs = Math.abs(watts);
-    if (abs < HOMEKIT_LUX_MIN)
-        return HOMEKIT_LUX_MIN;
-    if (abs > HOMEKIT_LUX_MAX)
-        return HOMEKIT_LUX_MAX;
+    if (abs < exports.HOMEKIT_LUX_MIN)
+        return exports.HOMEKIT_LUX_MIN;
+    if (abs > exports.HOMEKIT_LUX_MAX)
+        return exports.HOMEKIT_LUX_MAX;
     return abs;
 }
 /** Round a percentage value into the HAP-required `0..100` integer band. */
-export function clampPercent(value) {
+function clampPercent(value) {
     if (value === undefined || value === null || !Number.isFinite(value))
         return 0;
     if (value < 0)

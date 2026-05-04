@@ -1,4 +1,7 @@
-import { clampPercent, powerToLux } from "../util/powerToLux.js";
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SiteAccessory = void 0;
+const powerToLux_js_1 = require("../util/powerToLux.js");
 const SUBTYPE_BATTERY = "home-battery";
 const SUBTYPE_PV = "pv-power";
 const SUBTYPE_GRID = "grid-power";
@@ -23,7 +26,7 @@ const BATTERY_MODE_SUBTYPES = {
  *   - LightSensor       "Home Consumption"    lux = homePower
  *   - Switch ×3         "Battery Normal/Hold/Charge"  (only if writable)
  */
-export class SiteAccessory {
+class SiteAccessory {
     api;
     log;
     client;
@@ -57,21 +60,21 @@ export class SiteAccessory {
         const C = this.api.hap.Characteristic;
         const battery = state.battery ?? {};
         if (this.batteryService) {
-            this.batteryService.updateCharacteristic(C.BatteryLevel, clampPercent(battery.soc));
+            this.batteryService.updateCharacteristic(C.BatteryLevel, (0, powerToLux_js_1.clampPercent)(battery.soc));
             // ChargingState: 0 = NOT_CHARGING, 1 = CHARGING (positive battery.power = discharging,
             // so we charge when power < 0). 2 = NOT_CHARGEABLE; we don't use it.
             const power = typeof battery.power === "number" ? battery.power : 0;
             this.batteryService.updateCharacteristic(C.ChargingState, power < 0 ? 1 : 0);
-            this.batteryService.updateCharacteristic(C.StatusLowBattery, clampPercent(battery.soc) < 20 ? 1 : 0);
+            this.batteryService.updateCharacteristic(C.StatusLowBattery, (0, powerToLux_js_1.clampPercent)(battery.soc) < 20 ? 1 : 0);
         }
         if (this.pvService) {
-            this.pvService.updateCharacteristic(C.CurrentAmbientLightLevel, powerToLux(state.pvPower));
+            this.pvService.updateCharacteristic(C.CurrentAmbientLightLevel, (0, powerToLux_js_1.powerToLux)(state.pvPower));
         }
         if (this.gridService) {
             const gridPower = state.grid && typeof state.grid.power === "number"
                 ? state.grid.power
                 : 0;
-            this.gridService.updateCharacteristic(C.CurrentAmbientLightLevel, powerToLux(gridPower));
+            this.gridService.updateCharacteristic(C.CurrentAmbientLightLevel, (0, powerToLux_js_1.powerToLux)(gridPower));
             if (this.gridDirectionService) {
                 // ContactSensor: 0 = CONTACT_DETECTED ("closed", we use for export),
                 //                1 = CONTACT_NOT_DETECTED ("open", we use for import).
@@ -79,7 +82,7 @@ export class SiteAccessory {
             }
         }
         if (this.homeService) {
-            this.homeService.updateCharacteristic(C.CurrentAmbientLightLevel, powerToLux(state.homePower));
+            this.homeService.updateCharacteristic(C.CurrentAmbientLightLevel, (0, powerToLux_js_1.powerToLux)(state.homePower));
         }
         const mode = state.batteryMode;
         for (const [m, svc] of this.modeSwitches) {
@@ -149,4 +152,5 @@ export class SiteAccessory {
         return svc;
     }
 }
+exports.SiteAccessory = SiteAccessory;
 //# sourceMappingURL=siteAccessory.js.map

@@ -1,11 +1,17 @@
-import { EventEmitter } from "node:events";
-import WebSocket from "ws";
-import { redactSecret } from "../util/redact.js";
-import { applyUpdate, parseFrame } from "./decoders.js";
-export const DEFAULT_POLL_INTERVAL_MS = 30_000;
-export const DEFAULT_RECONNECT_DELAY_MS = 5_000;
-export const MAX_RECONNECT_DELAY_MS = 60_000;
-export const REQUEST_TIMEOUT_MS = 10_000;
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.EvccClient = exports.REQUEST_TIMEOUT_MS = exports.MAX_RECONNECT_DELAY_MS = exports.DEFAULT_RECONNECT_DELAY_MS = exports.DEFAULT_POLL_INTERVAL_MS = void 0;
+const node_events_1 = require("node:events");
+const ws_1 = __importDefault(require("ws"));
+const redact_js_1 = require("../util/redact.js");
+const decoders_js_1 = require("./decoders.js");
+exports.DEFAULT_POLL_INTERVAL_MS = 30_000;
+exports.DEFAULT_RECONNECT_DELAY_MS = 5_000;
+exports.MAX_RECONNECT_DELAY_MS = 60_000;
+exports.REQUEST_TIMEOUT_MS = 10_000;
 /**
  * Talks to a single EVCC instance over REST and (optionally) WebSocket.
  *
@@ -14,7 +20,7 @@ export const REQUEST_TIMEOUT_MS = 10_000;
  * operations (`setLoadpointMode`, `setLoadpointLimitSoc`, …) — without a
  * password the client still works in read-only mode.
  */
-export class EvccClient extends EventEmitter {
+class EvccClient extends node_events_1.EventEmitter {
     baseUrl;
     password;
     log;
@@ -26,7 +32,7 @@ export class EvccClient extends EventEmitter {
     pollTimer = null;
     socket = null;
     reconnectTimer = null;
-    reconnectDelay = DEFAULT_RECONNECT_DELAY_MS;
+    reconnectDelay = exports.DEFAULT_RECONNECT_DELAY_MS;
     stopped = false;
     state = {};
     typedListeners = {
@@ -40,9 +46,9 @@ export class EvccClient extends EventEmitter {
         this.baseUrl = opts.baseUrl.replace(/\/+$/, "");
         this.password = opts.password;
         this.log = opts.log;
-        this.pollIntervalMs = opts.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+        this.pollIntervalMs = opts.pollIntervalMs ?? exports.DEFAULT_POLL_INTERVAL_MS;
         this.fetchImpl = opts.fetchImpl ?? fetch;
-        this.webSocketCtor = opts.webSocketCtor ?? WebSocket;
+        this.webSocketCtor = opts.webSocketCtor ?? ws_1.default;
     }
     /** Snapshot of the most recently observed state. Returned by reference — don't mutate. */
     getState() {
@@ -107,12 +113,12 @@ export class EvccClient extends EventEmitter {
     // ---------------------------------------------------------------------------
     async login() {
         const url = `${this.baseUrl}/api/auth/login`;
-        this.log.debug("EVCC login → %s (password=%s)", url, redactSecret(this.password));
+        this.log.debug("EVCC login → %s (password=%s)", url, (0, redact_js_1.redactSecret)(this.password));
         const res = await this.fetchImpl(url, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ password: this.password ?? "" }),
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+            signal: AbortSignal.timeout(exports.REQUEST_TIMEOUT_MS),
         });
         if (!res.ok) {
             throw new Error(`EVCC login HTTP ${res.status}`);
@@ -134,7 +140,7 @@ export class EvccClient extends EventEmitter {
         const url = `${this.baseUrl}/api/state`;
         const res = await this.fetchImpl(url, {
             headers: this.authHeaders(),
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+            signal: AbortSignal.timeout(exports.REQUEST_TIMEOUT_MS),
         });
         if (!res.ok) {
             throw new Error(`GET /api/state HTTP ${res.status}`);
@@ -169,7 +175,7 @@ export class EvccClient extends EventEmitter {
         const res = await this.fetchImpl(url, {
             method: "POST",
             headers: this.authHeaders(),
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+            signal: AbortSignal.timeout(exports.REQUEST_TIMEOUT_MS),
         });
         if (!res.ok) {
             // 401 → cookie likely expired; flush so the next call re-logs in.
@@ -218,7 +224,7 @@ export class EvccClient extends EventEmitter {
         }
         this.socket = socket;
         socket.on("open", () => {
-            this.reconnectDelay = DEFAULT_RECONNECT_DELAY_MS;
+            this.reconnectDelay = exports.DEFAULT_RECONNECT_DELAY_MS;
             this.log.info("Connected to EVCC websocket at %s", wsUrl);
             this.dispatch("connect");
         });
@@ -230,9 +236,9 @@ export class EvccClient extends EventEmitter {
                     : raw instanceof ArrayBuffer
                         ? Buffer.from(raw).toString("utf-8")
                         : String(raw);
-            const updates = parseFrame(text);
+            const updates = (0, decoders_js_1.parseFrame)(text);
             for (const u of updates) {
-                const touched = applyUpdate(this.state, u);
+                const touched = (0, decoders_js_1.applyUpdate)(this.state, u);
                 this.dispatch("update", u, touched);
             }
         });
@@ -253,7 +259,7 @@ export class EvccClient extends EventEmitter {
         if (this.reconnectTimer)
             return;
         const delay = this.reconnectDelay;
-        this.reconnectDelay = Math.min(this.reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
+        this.reconnectDelay = Math.min(this.reconnectDelay * 2, exports.MAX_RECONNECT_DELAY_MS);
         this.reconnectTimer = setTimeout(() => {
             this.reconnectTimer = null;
             this.connectSocket();
@@ -261,4 +267,5 @@ export class EvccClient extends EventEmitter {
         this.reconnectTimer.unref?.();
     }
 }
+exports.EvccClient = EvccClient;
 //# sourceMappingURL=client.js.map

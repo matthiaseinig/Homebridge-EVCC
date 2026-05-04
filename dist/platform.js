@@ -1,13 +1,16 @@
-import { EvccClient } from "./api/client.js";
-import { asLoadpointArray } from "./api/decoders.js";
-import { LoadpointAccessory } from "./accessories/loadpointAccessory.js";
-import { SiteAccessory } from "./accessories/siteAccessory.js";
-import { VehiclePresenceAccessory } from "./accessories/vehiclePresenceAccessory.js";
-import { PLATFORM_NAME, PLUGIN_NAME } from "./settings.js";
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.EvccPlatform = void 0;
+const client_js_1 = require("./api/client.js");
+const decoders_js_1 = require("./api/decoders.js");
+const loadpointAccessory_js_1 = require("./accessories/loadpointAccessory.js");
+const siteAccessory_js_1 = require("./accessories/siteAccessory.js");
+const vehiclePresenceAccessory_js_1 = require("./accessories/vehiclePresenceAccessory.js");
+const settings_js_1 = require("./settings.js");
 const SITE_ACCESSORY_KEY = "evcc-site";
 const LOADPOINT_KEY = (i) => `evcc-loadpoint-${i}`;
 const VEHICLE_KEY = (name) => `evcc-vehicle-${name}`;
-export class EvccPlatform {
+class EvccPlatform {
     log;
     config;
     api;
@@ -36,7 +39,7 @@ export class EvccPlatform {
         this.writable = !!config.password;
         this.client =
             deps.client ??
-                new EvccClient({
+                new client_js_1.EvccClient({
                     baseUrl: config.url,
                     password: config.password,
                     log,
@@ -121,7 +124,7 @@ export class EvccPlatform {
             (update.key.endsWith(".connected") ||
                 update.key.endsWith(".vehicleName") ||
                 update.key.split(".").length === 2)) {
-            const lps = asLoadpointArray(state.loadpoints);
+            const lps = (0, decoders_js_1.asLoadpointArray)(state.loadpoints);
             for (const v of this.vehicles.values())
                 v.applyLoadpoints(lps);
         }
@@ -150,7 +153,7 @@ export class EvccPlatform {
             this.siteAccessory.applyState(state);
         }
         else {
-            this.siteAccessory = new SiteAccessory({
+            this.siteAccessory = new siteAccessory_js_1.SiteAccessory({
                 api: this.api,
                 log: this.log,
                 client: this.client,
@@ -161,12 +164,12 @@ export class EvccPlatform {
         }
         if (isNew) {
             this.log.info("Adopted EVCC site accessory.");
-            this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+            this.api.registerPlatformAccessories(settings_js_1.PLUGIN_NAME, settings_js_1.PLATFORM_NAME, [accessory]);
             this.accessories.push(accessory);
         }
     }
     adoptLoadpoints(state) {
-        const lps = asLoadpointArray(state.loadpoints);
+        const lps = (0, decoders_js_1.asLoadpointArray)(state.loadpoints);
         for (let idx = 0; idx < lps.length; idx++) {
             this.adoptLoadpoint(idx, lps[idx]);
         }
@@ -193,7 +196,7 @@ export class EvccPlatform {
             existing.applyState(lp);
         }
         else {
-            this.loadpoints.set(idx, new LoadpointAccessory({
+            this.loadpoints.set(idx, new loadpointAccessory_js_1.LoadpointAccessory({
                 api: this.api,
                 log: this.log,
                 client: this.client,
@@ -210,7 +213,7 @@ export class EvccPlatform {
         }
         if (isNew) {
             this.log.info("Adopted loadpoint #%d (%s).", idx + 1, title);
-            this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+            this.api.registerPlatformAccessories(settings_js_1.PLUGIN_NAME, settings_js_1.PLATFORM_NAME, [accessory]);
             this.accessories.push(accessory);
         }
     }
@@ -218,7 +221,7 @@ export class EvccPlatform {
         if (this.config.hideVehiclePresence)
             return;
         const vehicles = state.vehicles ?? {};
-        const lps = asLoadpointArray(state.loadpoints);
+        const lps = (0, decoders_js_1.asLoadpointArray)(state.loadpoints);
         for (const [name, raw] of Object.entries(vehicles)) {
             const vehicle = {
                 ...(raw ?? {}),
@@ -246,7 +249,7 @@ export class EvccPlatform {
                 existing.applyLoadpoints(lps);
             }
             else {
-                const v = new VehiclePresenceAccessory({
+                const v = new vehiclePresenceAccessory_js_1.VehiclePresenceAccessory({
                     api: this.api,
                     log: this.log,
                     accessory,
@@ -257,7 +260,7 @@ export class EvccPlatform {
             }
             if (isNew) {
                 this.log.info("Adopted vehicle presence sensor: %s.", display);
-                this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+                this.api.registerPlatformAccessories(settings_js_1.PLUGIN_NAME, settings_js_1.PLATFORM_NAME, [accessory]);
                 this.accessories.push(accessory);
             }
         }
@@ -268,7 +271,7 @@ export class EvccPlatform {
      * is never pruned automatically.
      */
     pruneStale(state) {
-        const lpCount = asLoadpointArray(state.loadpoints).length;
+        const lpCount = (0, decoders_js_1.asLoadpointArray)(state.loadpoints).length;
         const seenVehicleNames = new Set(Object.keys(state.vehicles ?? {}));
         const stale = [];
         for (const a of this.accessories) {
@@ -290,7 +293,7 @@ export class EvccPlatform {
         if (stale.length === 0)
             return;
         this.log.info("Removing %d stale EVCC accessory/accessories.", stale.length);
-        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, stale);
+        this.api.unregisterPlatformAccessories(settings_js_1.PLUGIN_NAME, settings_js_1.PLATFORM_NAME, stale);
         for (const a of stale) {
             const idx = this.accessories.indexOf(a);
             if (idx >= 0)
@@ -303,4 +306,5 @@ export class EvccPlatform {
         }
     }
 }
+exports.EvccPlatform = EvccPlatform;
 //# sourceMappingURL=platform.js.map

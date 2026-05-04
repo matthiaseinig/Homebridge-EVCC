@@ -1,6 +1,7 @@
-import { EvccPlatform } from "./platform.js";
-import { PLATFORM_NAME, PLUGIN_NAME } from "./settings.js";
-export default (api) => {
-    api.registerPlatform(PLUGIN_NAME, PLATFORM_NAME, EvccPlatform);
+"use strict";
+const platform_js_1 = require("./platform.js");
+const settings_js_1 = require("./settings.js");
+module.exports = (api) => {
+    api.registerPlatform(settings_js_1.PLUGIN_NAME, settings_js_1.PLATFORM_NAME, platform_js_1.EvccPlatform);
 };
 //# sourceMappingURL=index.js.map

@@ -1,3 +1,6 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.VehiclePresenceAccessory = void 0;
 const SUBTYPE_OCCUPANCY = "vehicle-presence";
 /**
  * Per-vehicle presence accessory. Fires when the vehicle is currently assigned
@@ -6,7 +9,7 @@ const SUBTYPE_OCCUPANCY = "vehicle-presence";
  * Useful for HomeKit automations like "garage light when my car arrives" or
  * "notify when the spouse's car is plugged in".
  */
-export class VehiclePresenceAccessory {
+class VehiclePresenceAccessory {
     api;
     accessory;
     vehicle;
@@ -59,4 +62,5 @@ export class VehiclePresenceAccessory {
         return svc;
     }
 }
+exports.VehiclePresenceAccessory = VehiclePresenceAccessory;
 //# sourceMappingURL=vehiclePresenceAccessory.js.map
