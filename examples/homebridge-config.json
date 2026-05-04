@@ -1,0 +1,17 @@
+{
+  "platforms": [
+    {
+      "platform": "EVCC",
+      "name": "EVCC",
+      "url": "http://evcc.local:7070",
+      "password": "your-admin-password",
+      "pollInterval": 30,
+      "loadpointMode": "outlet",
+      "defaultLoadpointMode": "pv",
+      "exposeVehicleLimit": false,
+      "hideSite": false,
+      "hideVehiclePresence": false,
+      "debug": false
+    }
+  ]
+}

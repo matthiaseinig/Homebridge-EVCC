@@ -1,0 +1,20 @@
+{
+  "bridge": {
+    "name": "Homebridge EVCC dev",
+    "username": "0E:11:22:33:44:55",
+    "port": 51826,
+    "pin": "031-45-154"
+  },
+  "platforms": [
+    {
+      "platform": "EVCC",
+      "name": "EVCC",
+      "url": "http://evcc.local:7070",
+      "password": "REPLACE-ME",
+      "loadpointMode": "outlet",
+      "defaultLoadpointMode": "pv",
+      "exposeVehicleLimit": true,
+      "debug": true
+    }
+  ]
+}

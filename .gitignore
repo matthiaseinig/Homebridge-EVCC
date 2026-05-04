@@ -1,0 +1,21 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+.vscode/
+.idea/
+
+# Local Homebridge dev sandbox — never commit credentials or runtime state.
+dev/*
+!dev/README.md
+!dev/config.example.json
+
+# Local IDE / agent config — keep out of the public repo.
+.claude/
+
+# Working notes that live alongside (not inside) this repo.
+HANDOVER.md

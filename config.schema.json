@@ -1,0 +1,89 @@
+{
+  "pluginAlias": "EVCC",
+  "pluginType": "platform",
+  "singular": true,
+  "headerDisplay": "Homebridge plugin for the EVCC solar charging controller. Point it at your EVCC instance — the plugin will discover loadpoints, vehicles, and site telemetry automatically.",
+  "footerDisplay": "Source & docs: https://github.com/matthiaseinig/Homebridge-EVCC",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Name",
+        "type": "string",
+        "required": true,
+        "default": "EVCC"
+      },
+      "url": {
+        "title": "EVCC URL",
+        "type": "string",
+        "required": true,
+        "format": "uri",
+        "placeholder": "http://evcc.local:7070",
+        "description": "Base URL of your EVCC instance. No trailing slash."
+      },
+      "password": {
+        "title": "Admin password (optional)",
+        "type": "string",
+        "format": "password",
+        "description": "Required only for settable HomeKit controls (charge limit, mode, battery mode). Leave blank for a read-only plugin."
+      },
+      "pollInterval": {
+        "title": "Polling interval (seconds)",
+        "type": "integer",
+        "default": 30,
+        "minimum": 5,
+        "maximum": 600,
+        "description": "REST poll cadence. The websocket pushes diffs in near-real-time; this poll is the safety net when the WS drops."
+      },
+      "loadpointMode": {
+        "title": "Loadpoint mode UI",
+        "type": "string",
+        "default": "outlet",
+        "oneOf": [
+          { "enum": ["outlet"], "title": "Outlet (on/off)" },
+          { "enum": ["switches"], "title": "3 switches (Now / PV / Min+PV)" },
+          { "enum": ["readonly"], "title": "Read-only" }
+        ],
+        "description": "How the loadpoint exposes its mode. 'Outlet' = single on/off that toggles between off and your default mode. 'Switches' = 3 mutually-exclusive switches for full mode control. 'Read-only' = no controls."
+      },
+      "defaultLoadpointMode": {
+        "title": "Default mode for the on/off outlet",
+        "type": "string",
+        "default": "pv",
+        "oneOf": [
+          { "enum": ["now"], "title": "Now (charge immediately)" },
+          { "enum": ["pv"], "title": "PV (only solar)" },
+          { "enum": ["minpv"], "title": "Min+PV (minimum charge plus solar)" }
+        ],
+        "description": "When loadpointMode = 'outlet', this is the mode the loadpoint switches to when the outlet is turned ON. Ignored otherwise.",
+        "condition": {
+          "functionBody": "return model.loadpointMode === 'outlet' || !model.loadpointMode;"
+        }
+      },
+      "exposeVehicleLimit": {
+        "title": "Also expose the assigned vehicle's charge limit",
+        "type": "boolean",
+        "default": false,
+        "description": "Adds a second WindowCovering per loadpoint that drives the *vehicle's* limitSoc (follows the car wherever it plugs in). Off by default — the loadpoint limit is usually what you want."
+      },
+      "hideSite": {
+        "title": "Hide site telemetry accessory",
+        "type": "boolean",
+        "default": false,
+        "description": "Suppress the site-wide accessory (PV / grid / home battery / consumption). Loadpoints and vehicle sensors still appear."
+      },
+      "hideVehiclePresence": {
+        "title": "Hide per-vehicle presence sensors",
+        "type": "boolean",
+        "default": false,
+        "description": "Suppress the per-vehicle OccupancySensor accessories. Useful if you only have one car and don't need a dedicated 'is plugged in' sensor."
+      },
+      "debug": {
+        "title": "Verbose logging",
+        "type": "boolean",
+        "default": false,
+        "description": "Log raw websocket frames and REST traffic. Leave off for normal use."
+      }
+    }
+  }
+}
