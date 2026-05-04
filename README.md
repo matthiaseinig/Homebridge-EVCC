@@ -36,7 +36,7 @@ It exposes everything EVCC knows about your home as native HomeKit accessories: 
 3. (Optional) Enter the EVCC admin password — required only if you want to drive controls (charge limit, mode, battery mode) from HomeKit. Without it the plugin runs read-only.
 4. Save and restart Homebridge.
 
-> The Git-based install builds the TypeScript sources locally via the package's `prepare` hook; you'll need the same Node version Homebridge runs on.
+> The Git-based install ships a pre-built `dist/` so no local TypeScript compilation is required at install time.
 
 ## Configuration
 
