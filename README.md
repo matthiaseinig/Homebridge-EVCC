@@ -97,6 +97,12 @@ Example `config.json` block:
 }
 ```
 
+## Screenshots
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/matthiaseinig/Homebridge-EVCC/main/docs/screenshots/home-app.png" alt="EVCC accessories in the iOS Home app" width="320" />
+</p>
+
 ## Triggering automations
 
 Every binary signal the plugin exposes can drive a HomeKit automation. Useful patterns:
