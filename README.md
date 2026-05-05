@@ -25,18 +25,43 @@ It exposes everything EVCC knows about your home as native HomeKit accessories: 
 - **Optional mode switches** — flip the loadpoint UI to 3 mutually-exclusive switches (Now / PV / Min+PV) instead of the single on/off outlet.
 - **Optional battery-mode switches** — Normal / Hold / Charge for your home battery, when an admin password is configured.
 
+## Install
+
+The plugin ships a pre-built `dist/` in the repo and on the GitHub release tarballs, so no TypeScript compilation runs on the install host.
+
+### Homebridge UI / hb-service (recommended)
+
+The Homebridge image / `hb-service` installs read plugins from `/var/lib/homebridge/node_modules/`. The clean way to add plugins is to pin them in `/var/lib/homebridge/package.json` so container restarts re-install the same version automatically:
+
+```sh
+cd /var/lib/homebridge
+/opt/homebridge/bin/npm install --save matthiaseinig/Homebridge-EVCC#v1.0.1
+```
+
+That adds an entry like `"homebridge-evcc": "github:matthiaseinig/Homebridge-EVCC#v1.0.1"` to `package.json` and installs the package into `/var/lib/homebridge/node_modules/`. To upgrade later, bump the tag and re-run the same command.
+
+If you prefer `hb-service` UI flows, you can also paste `matthiaseinig/Homebridge-EVCC` into the Homebridge UI's "Install Plugin" dialog (Plugins tab → search box accepts GitHub `user/repo` shorthand).
+
+### Standalone Homebridge (no hb-service)
+
+```sh
+sudo npm install -g matthiaseinig/Homebridge-EVCC
+```
+
+### Once published to npm
+
+```sh
+sudo npm install -g homebridge-evcc
+```
+
+(Or install from the Homebridge UI's plugins tab in the usual way.)
+
 ## Quick start
 
-1. Install the plugin. The plugin is not yet on npm — install it directly from GitHub instead:
-   ```sh
-   sudo npm install -g matthiaseinig/Homebridge-EVCC
-   ```
-   Once the first npm release lands, `sudo npm install -g homebridge-evcc` (or installing from the Homebridge UI) will work too.
+1. Install the plugin (see above).
 2. Open the plugin settings in the Homebridge UI and enter your EVCC base URL, e.g. `http://evcc.local:7070`.
 3. (Optional) Enter the EVCC admin password — required only if you want to drive controls (charge limit, mode, battery mode) from HomeKit. Without it the plugin runs read-only.
 4. Save and restart Homebridge.
-
-> The Git-based install ships a pre-built `dist/` so no local TypeScript compilation is required at install time.
 
 ## Configuration
 

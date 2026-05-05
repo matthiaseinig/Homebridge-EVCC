@@ -65,6 +65,8 @@ class LoadpointAccessory {
     applyState(state) {
         this.state = { ...this.state, ...state };
         const C = this.api.hap.Characteristic;
+        // Title can arrive late (after WS reconnect) — keep AccessoryInformation in sync.
+        this.refreshInformationName();
         if (this.outletService) {
             this.outletService.updateCharacteristic(C.On, !!this.state.enabled);
             this.outletService.updateCharacteristic(C.OutletInUse, !!this.state.connected);
@@ -110,6 +112,11 @@ class LoadpointAccessory {
             .setCharacteristic(C.Model, "Loadpoint")
             .setCharacteristic(C.SerialNumber, `lp-${this.loadpointId}`)
             .setCharacteristic(C.Name, this.title());
+    }
+    refreshInformationName() {
+        const info = this.accessory.getService(this.api.hap.Service.AccessoryInformation);
+        if (info)
+            info.updateCharacteristic(this.api.hap.Characteristic.Name, this.title());
     }
     configureOutlet() {
         if (this.config.modeUi === "readonly" && !this.config.writable) {

@@ -1,7 +1,7 @@
 {
   "displayName": "EVCC",
   "name": "homebridge-evcc",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Homebridge plugin for the EVCC solar charging controller. Exposes loadpoints, vehicles, home battery, PV production, and grid power as native HomeKit accessories with a charge-limit slider you can drive from the Home app or Siri.",
   "license": "MIT",
   "author": {

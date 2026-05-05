@@ -60,6 +60,10 @@ class SiteAccessory {
         this.state = state;
         const C = this.api.hap.Characteristic;
         const battery = state.battery ?? {};
+        // siteTitle can change post-startup (rare, but happens on EVCC config reload).
+        const info = this.accessory.getService(this.api.hap.Service.AccessoryInformation);
+        if (info)
+            info.updateCharacteristic(C.Name, state.siteTitle ?? "EVCC");
         if (this.batteryService) {
             this.batteryService.updateCharacteristic(C.BatteryLevel, (0, powerToLux_js_1.clampPercent)(battery.soc));
             // ChargingState: 0 = NOT_CHARGING, 1 = CHARGING (positive battery.power = discharging,

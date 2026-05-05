@@ -53,6 +53,10 @@ export class VehiclePresenceAccessory {
       this.displayName(),
       this.api.hap.Characteristic,
     );
+    const info = this.accessory.getService(this.api.hap.Service.AccessoryInformation);
+    if (info) {
+      info.updateCharacteristic(this.api.hap.Characteristic.Name, this.displayName());
+    }
   }
 
   get name(): string | undefined {

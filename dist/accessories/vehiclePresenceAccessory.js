@@ -31,6 +31,10 @@ class VehiclePresenceAccessory {
     applyVehicleUpdate(vehicle) {
         this.vehicle = { ...this.vehicle, ...vehicle };
         (0, applyServiceName_js_1.applyServiceName)(this.occupancyService, this.displayName(), this.api.hap.Characteristic);
+        const info = this.accessory.getService(this.api.hap.Service.AccessoryInformation);
+        if (info) {
+            info.updateCharacteristic(this.api.hap.Characteristic.Name, this.displayName());
+        }
     }
     get name() {
         return this.vehicle.name;

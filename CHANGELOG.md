@@ -8,6 +8,21 @@ Version bumps and entries below are managed by
 [release-please](https://github.com/googleapis/release-please) on every push to
 `main`.
 
+## [1.0.1] - 2026-05-05
+
+### Added
+- README install section now documents the proven hb-service install flow:
+  pin via `npm install --save matthiaseinig/Homebridge-EVCC#vX.Y.Z` inside
+  `/var/lib/homebridge/` so container restarts re-install the same version
+  automatically. Also covers the standalone Homebridge install and the
+  future-npm install for completeness.
+
+### Fixed
+- AccessoryInformation `Name` characteristic now refreshes when EVCC pushes a
+  new `title` / `siteTitle` / vehicle title via WebSocket. Previously the
+  accessory tile in the Home app kept its initial label even after the loadpoint
+  or site was renamed in EVCC.
+
 ## [1.0.0] - 2026-05-04
 
 ### Added
