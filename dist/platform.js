@@ -101,6 +101,9 @@ class EvccPlatform {
         if (this.siteAccessory && !update.key.startsWith("loadpoints.")) {
             this.siteAccessory.applyState(state);
         }
+        else {
+            this.siteAccessory?.touch();
+        }
         // Per-loadpoint diff: forward only the trailing key segment.
         if (update.key.startsWith("loadpoints.")) {
             for (const idx of touched) {
@@ -150,7 +153,7 @@ class EvccPlatform {
         }
         accessory.context.kind = "site";
         if (this.siteAccessory) {
-            this.siteAccessory.applyState(state);
+            this.siteAccessory.applyState(state, true);
         }
         else {
             this.siteAccessory = new siteAccessory_js_1.SiteAccessory({
@@ -160,6 +163,7 @@ class EvccPlatform {
                 accessory,
                 state,
                 writable: this.writable,
+                energy: !this.config.hideEnergyCharacteristics,
             });
         }
         if (isNew) {
@@ -208,6 +212,7 @@ class EvccPlatform {
                     defaultMode: this.config.defaultLoadpointMode ?? "pv",
                     exposeVehicleLimit: !!this.config.exposeVehicleLimit,
                     writable: this.writable,
+                    energy: !this.config.hideEnergyCharacteristics,
                 },
             }));
         }

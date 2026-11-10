@@ -32,6 +32,8 @@ export interface EvccPlatformConfig extends PlatformConfig {
   hideSite?: boolean;
   /** Skip the per-vehicle occupancy sensors. Default false. */
   hideVehiclePresence?: boolean;
+  /** Skip the custom energy and charging services and control tags (docs/zuhause-contract.md). Default false. */
+  hideEnergyCharacteristics?: boolean;
   /** Verbose logging of WS frames and REST traffic. */
   debug?: boolean;
 }
@@ -153,6 +155,8 @@ export class EvccPlatform implements DynamicPlatformPlugin {
     // Site-level keys: re-render the site card on every change. It's cheap.
     if (this.siteAccessory && !update.key.startsWith("loadpoints.")) {
       this.siteAccessory.applyState(state);
+    } else {
+      this.siteAccessory?.touch();
     }
 
     // Per-loadpoint diff: forward only the trailing key segment.
@@ -205,7 +209,7 @@ export class EvccPlatform implements DynamicPlatformPlugin {
     accessory.context.kind = "site";
 
     if (this.siteAccessory) {
-      this.siteAccessory.applyState(state);
+      this.siteAccessory.applyState(state, true);
     } else {
       this.siteAccessory = new SiteAccessory({
         api: this.api,
@@ -214,6 +218,7 @@ export class EvccPlatform implements DynamicPlatformPlugin {
         accessory,
         state,
         writable: this.writable,
+        energy: !this.config.hideEnergyCharacteristics,
       });
     }
 
@@ -267,6 +272,7 @@ export class EvccPlatform implements DynamicPlatformPlugin {
             defaultMode: this.config.defaultLoadpointMode ?? "pv",
             exposeVehicleLimit: !!this.config.exposeVehicleLimit,
             writable: this.writable,
+            energy: !this.config.hideEnergyCharacteristics,
           },
         }),
       );
