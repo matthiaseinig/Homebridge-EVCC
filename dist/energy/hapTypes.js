@@ -3,6 +3,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.energyHapTypes = energyHapTypes;
 exports.servicesOfType = servicesOfType;
 exports.ensureEnergyService = ensureEnergyService;
+exports.ensureCustomCharacteristic = ensureCustomCharacteristic;
+exports.removeCustomCharacteristic = removeCustomCharacteristic;
+exports.pruneRetiredServices = pruneRetiredServices;
 exports.setServiceName = setServiceName;
 exports.applyValues = applyValues;
 exports.pruneServices = pruneServices;
@@ -107,18 +110,43 @@ function ensureEnergyService(hap, accessory, key, name, subtype) {
     const svc = servicesOfType(accessory, ctor).find((s) => s.subtype === subtype) ??
         accessory.addService(ctor, name, subtype);
     // The characteristic set only needs checking once per service instance; the
-    // site accessory re-renders on every websocket frame.
+    // accessories re-render on every websocket frame.
     if (!verifiedServices.has(svc)) {
-        for (const k of definitions_js_1.SERVICES[key].chars) {
-            const c = types.char(k);
-            const present = svc.characteristics.some((x) => x.UUID === c.UUID);
-            const characteristic = present ? svc.getCharacteristic(c) : svc.addCharacteristic(c);
-            characteristic.setProps(types.props(k));
-        }
+        for (const k of definitions_js_1.SERVICES[key].chars)
+            ensureCustomCharacteristic(hap, svc, k);
         verifiedServices.add(svc);
     }
     setServiceName(hap, svc, name);
     return svc;
+}
+/**
+ * Make sure `svc` (custom or standard, fresh or restored from the cache)
+ * carries the custom characteristic `key` with its declared props. Adding it
+ * explicitly avoids HAP's "not in required or optional characteristics"
+ * warning.
+ */
+function ensureCustomCharacteristic(hap, svc, key) {
+    const types = energyHapTypes(hap);
+    const c = types.char(key);
+    const present = svc.characteristics.some((x) => x.UUID === c.UUID);
+    const characteristic = present ? svc.getCharacteristic(c) : svc.addCharacteristic(c);
+    characteristic.setProps(types.props(key));
+    return characteristic;
+}
+/** Remove the custom characteristic `key` from `svc` if it is present. */
+function removeCustomCharacteristic(svc, key) {
+    const uuid = definitions_js_1.CHARS[key].uuid;
+    const existing = svc.characteristics.find((x) => x.UUID === uuid);
+    if (existing)
+        svc.removeCharacteristic(existing);
+}
+/** Remove services whose type UUID is retired (see RETIRED in definitions.ts). */
+function pruneRetiredServices(accessory) {
+    const services = accessory.services;
+    for (const svc of [...services]) {
+        if (svc.UUID in definitions_js_1.RETIRED.services)
+            accessory.removeService(svc);
+    }
 }
 /** Keep the HAP Name characteristic (and the cached display name) in sync. */
 function setServiceName(hap, svc, name) {

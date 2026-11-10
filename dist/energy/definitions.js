@@ -1,25 +1,28 @@
 "use strict";
 /**
- * Custom HomeKit characteristic and service definitions for EVCC energy data.
+ * Custom HomeKit characteristic and service definitions for EVCC charging data.
  *
  * These are read-only, notifying characteristics meant for apps that talk to
  * HomeKit directly (the Apple Home app ignores them). The UUIDs were generated
- * once and are a public contract: never change or reuse one. Add new entries
- * with new UUIDs instead. The full contract, including units, ranges, signs
- * and the EVCC source field of every characteristic, is in
+ * once and are a public contract: never change or reuse one, including the
+ * retired ones listed in RETIRED. Add new entries with new UUIDs instead. The
+ * full contract, including units, ranges, signs, the EVCC source field of
+ * every characteristic and the charging controls, is in
  * docs/zuhause-contract.md and must be kept in sync with this file.
+ *
+ * Site energy (PV, battery, grid, home, aux) is deliberately not exposed by
+ * this plugin; the consuming app gets it from a dedicated inverter plugin.
  *
  * UUID scheme: a random suffix shared by all types of this plugin, with an
  * `E5C0xxxx` prefix for characteristics and `E5C1xxxx` for services.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SERVICES = exports.CHARS = exports.UUID_SUFFIX = void 0;
+exports.RETIRED = exports.CONTROL_ROLES = exports.SERVICES = exports.CHARS = exports.UUID_SUFFIX = void 0;
 exports.UUID_SUFFIX = "-8B93-4652-90CD-F02EAF5356EA";
 const charUuid = (n) => `E5C0${n}${exports.UUID_SUFFIX}`;
 const serviceUuid = (n) => `E5C1${n}${exports.UUID_SUFFIX}`;
 const POWER = { format: "float", unit: "W", min: -1_000_000, max: 1_000_000, decimals: 1 };
 const ENERGY = { format: "float", unit: "kWh", min: 0, max: 1_000_000_000, decimals: 3 };
-const CURRENT = { format: "float", unit: "A", min: -1_000, max: 1_000, decimals: 2 };
 const PERCENT = { format: "float", unit: "%", min: 0, max: 100, decimals: 1 };
 const PRICE = {
     format: "float",
@@ -37,48 +40,47 @@ const TIMESTAMP = {
 const TEXT = { format: "string", maxLen: 64 };
 const FLAG = { format: "bool" };
 exports.CHARS = {
-    // Generic meter characteristics, reused by the PV array and aux meter services.
-    MeterPower: { uuid: charUuid("0001"), name: "Meter Power", ...POWER },
-    MeterEnergyTotal: { uuid: charUuid("0002"), name: "Meter Energy Total", ...ENERGY },
-    MeterId: { uuid: charUuid("0003"), name: "Meter ID", ...TEXT },
-    // Site.
-    PvPower: { uuid: charUuid("0010"), name: "PV Power", ...POWER },
-    PvEnergyTotal: { uuid: charUuid("0011"), name: "PV Energy Total", ...ENERGY },
-    GridPower: { uuid: charUuid("0012"), name: "Grid Power", ...POWER },
-    GridEnergyImportTotal: { uuid: charUuid("0013"), name: "Grid Import Total", ...ENERGY },
-    GridEnergyExportTotal: { uuid: charUuid("0014"), name: "Grid Export Total", ...ENERGY },
-    GridPowerL1: { uuid: charUuid("0015"), name: "Grid Power L1", ...POWER },
-    GridPowerL2: { uuid: charUuid("0016"), name: "Grid Power L2", ...POWER },
-    GridPowerL3: { uuid: charUuid("0017"), name: "Grid Power L3", ...POWER },
-    GridCurrentL1: { uuid: charUuid("0018"), name: "Grid Current L1", ...CURRENT },
-    GridCurrentL2: { uuid: charUuid("0019"), name: "Grid Current L2", ...CURRENT },
-    GridCurrentL3: { uuid: charUuid("001A"), name: "Grid Current L3", ...CURRENT },
-    HomePower: { uuid: charUuid("001B"), name: "Home Power", ...POWER },
-    AuxPower: { uuid: charUuid("001C"), name: "Aux Power", ...POWER },
-    BatteryPower: { uuid: charUuid("001D"), name: "Battery Power", ...POWER },
-    BatterySoc: { uuid: charUuid("001E"), name: "Battery SoC", ...PERCENT },
-    BatteryCapacity: { uuid: charUuid("001F"), name: "Battery Capacity", ...ENERGY },
-    BatteryEnergyDischargeTotal: {
-        uuid: charUuid("0020"),
-        name: "Battery Discharge Total",
-        ...ENERGY,
-    },
-    BatteryEnergyChargeTotal: { uuid: charUuid("0021"), name: "Battery Charge Total", ...ENERGY },
-    BatteryConfigured: { uuid: charUuid("0022"), name: "Battery Configured", ...FLAG },
-    GridConfigured: { uuid: charUuid("0023"), name: "Grid Configured", ...FLAG },
-    GreenShareHome: { uuid: charUuid("0024"), name: "Green Share Home", ...PERCENT },
-    GreenShareLoadpoints: { uuid: charUuid("0025"), name: "Green Share Loadpoints", ...PERCENT },
-    TariffGrid: { uuid: charUuid("0026"), name: "Tariff Grid", ...PRICE },
-    TariffFeedIn: { uuid: charUuid("0027"), name: "Tariff Feed-In", ...PRICE },
-    Currency: { uuid: charUuid("0028"), name: "Currency", format: "string", maxLen: 8 },
-    LastUpdate: { uuid: charUuid("0029"), name: "Last Update", ...TIMESTAMP },
     // Loadpoint.
-    ChargePower: { uuid: charUuid("0040"), name: "Charge Power", ...POWER },
-    ChargeMode: { uuid: charUuid("0041"), name: "Charge Mode", format: "string", maxLen: 16 },
-    VehicleConnected: { uuid: charUuid("0042"), name: "Vehicle Connected", ...FLAG },
-    Charging: { uuid: charUuid("0043"), name: "Charging", ...FLAG },
-    LimitSoc: { uuid: charUuid("0044"), name: "Limit SoC", ...PERCENT },
-    VehicleSoc: { uuid: charUuid("0045"), name: "Vehicle SoC", ...PERCENT },
+    ChargePower: {
+        uuid: charUuid("0040"),
+        name: "Charge Power",
+        ...POWER,
+        source: "`loadpoints[i].chargePower`",
+        sign: ">= 0",
+    },
+    ChargeMode: {
+        uuid: charUuid("0041"),
+        name: "Charge Mode",
+        format: "string",
+        maxLen: 16,
+        source: "`loadpoints[i].mode`: `off`, `now`, `minpv`, `pv` (passed through, future EVCC modes included)",
+    },
+    VehicleConnected: {
+        uuid: charUuid("0042"),
+        name: "Vehicle Connected",
+        ...FLAG,
+        source: "`loadpoints[i].connected`",
+    },
+    Charging: {
+        uuid: charUuid("0043"),
+        name: "Charging",
+        ...FLAG,
+        source: "`loadpoints[i].charging`",
+    },
+    LimitSoc: {
+        uuid: charUuid("0044"),
+        name: "Limit SoC",
+        ...PERCENT,
+        source: "`loadpoints[i].limitSoc`",
+        sign: "0 means no session limit",
+    },
+    VehicleSoc: {
+        uuid: charUuid("0045"),
+        name: "Vehicle SoC",
+        ...PERCENT,
+        source: "`loadpoints[i].vehicleSoc`",
+        sign: "not a SoC for heating devices",
+    },
     VehicleRange: {
         uuid: charUuid("0046"),
         name: "Vehicle Range",
@@ -87,20 +89,96 @@ exports.CHARS = {
         min: 0,
         max: 100_000,
         decimals: 0,
+        source: "`loadpoints[i].vehicleRange`",
+        sign: ">= 0",
     },
-    VehicleName: { uuid: charUuid("0047"), name: "Vehicle Name", ...TEXT },
-    VehicleTitle: { uuid: charUuid("0048"), name: "Vehicle Title", ...TEXT },
-    SessionEnergy: { uuid: charUuid("0049"), name: "Session Energy", ...ENERGY },
-    TodayEnergy: { uuid: charUuid("004A"), name: "Today Energy", ...ENERGY },
-    ChargeMeterTotal: { uuid: charUuid("004B"), name: "Charge Meter Total", ...ENERGY },
-    PlanTime: { uuid: charUuid("004C"), name: "Plan Time", ...TIMESTAMP },
-    PlanSoc: { uuid: charUuid("004D"), name: "Plan SoC", ...PERCENT },
-    PlanActive: { uuid: charUuid("004E"), name: "Plan Active", ...FLAG },
+    VehicleName: {
+        uuid: charUuid("0047"),
+        name: "Vehicle Name",
+        ...TEXT,
+        source: "`loadpoints[i].vehicleName` (key into `vehicles`)",
+    },
+    VehicleTitle: {
+        uuid: charUuid("0048"),
+        name: "Vehicle Title",
+        ...TEXT,
+        source: "`loadpoints[i].vehicleTitle`",
+    },
+    SessionEnergy: {
+        uuid: charUuid("0049"),
+        name: "Session Energy",
+        ...ENERGY,
+        source: "`loadpoints[i].sessionEnergy` (Wh) / 1000",
+        sign: ">= 0",
+    },
+    TodayEnergy: {
+        uuid: charUuid("004A"),
+        name: "Today Energy",
+        ...ENERGY,
+        source: "`loadpoints[i].todayEnergy` (Wh) / 1000, since local midnight",
+        sign: ">= 0",
+    },
+    ChargeMeterTotal: {
+        uuid: charUuid("004B"),
+        name: "Charge Meter Total",
+        ...ENERGY,
+        source: "`loadpoints[i].chargeTotalImport` (meter total)",
+        sign: ">= 0",
+    },
+    PlanTime: {
+        uuid: charUuid("004C"),
+        name: "Plan Time",
+        ...TIMESTAMP,
+        source: "`loadpoints[i].effectivePlanTime`, else `planTime` (RFC 3339)",
+        sign: "0 = no plan",
+    },
+    PlanSoc: {
+        uuid: charUuid("004D"),
+        name: "Plan SoC",
+        ...PERCENT,
+        source: "`effectivePlanSoc` when the effective plan is used, else `planSoc`",
+        sign: "0 = no plan",
+    },
+    PlanActive: {
+        uuid: charUuid("004E"),
+        name: "Plan Active",
+        ...FLAG,
+        source: "`loadpoints[i].planActive`",
+    },
+    LastUpdate: {
+        uuid: charUuid("004F"),
+        name: "Last Update",
+        ...TIMESTAMP,
+        source: "plugin clock when it last applied EVCC data for this loadpoint (REST poll or a websocket frame for this loadpoint)",
+    },
     // Charging statistics (one service per EVCC statistics period).
-    StatPeriod: { uuid: charUuid("0060"), name: "Statistics Period", format: "string", maxLen: 16 },
-    StatChargedEnergy: { uuid: charUuid("0061"), name: "Charged Energy", ...ENERGY },
-    StatSolarPercentage: { uuid: charUuid("0062"), name: "Solar Percentage", ...PERCENT },
-    StatAvgPrice: { uuid: charUuid("0063"), name: "Average Price", ...PRICE },
+    StatPeriod: {
+        uuid: charUuid("0060"),
+        name: "Statistics Period",
+        format: "string",
+        maxLen: 16,
+        source: "key of `statistics` (`30d`, `365d`, `thisYear`, `total`)",
+    },
+    StatChargedEnergy: {
+        uuid: charUuid("0061"),
+        name: "Charged Energy",
+        ...ENERGY,
+        source: "`statistics.<period>.chargedKWh`",
+        sign: ">= 0",
+    },
+    StatSolarPercentage: {
+        uuid: charUuid("0062"),
+        name: "Solar Percentage",
+        ...PERCENT,
+        source: "`statistics.<period>.solarPercentage`",
+    },
+    StatAvgPrice: {
+        uuid: charUuid("0063"),
+        name: "Average Price",
+        ...PRICE,
+        source: "`statistics.<period>.avgPrice`",
+        sign: "configured currency",
+    },
     StatAvgCo2: {
         uuid: charUuid("0064"),
         name: "Average CO2",
@@ -109,51 +187,28 @@ exports.CHARS = {
         min: 0,
         max: 100_000,
         decimals: 1,
+        source: "`statistics.<period>.avgCo2`",
+        sign: ">= 0",
+    },
+    // Added to the existing standard control services so apps can identify them
+    // without relying on service names.
+    ControlRole: {
+        uuid: charUuid("0070"),
+        name: "Control Role",
+        format: "string",
+        maxLen: 32,
+        source: "plugin constant per control service (see Charging controls)",
+    },
+    // True when a write to the control is forwarded to EVCC (admin password
+    // configured and the control is not read-only by configuration).
+    ControlEnabled: {
+        uuid: charUuid("0071"),
+        name: "Control Enabled",
+        ...FLAG,
+        source: "plugin config: admin password set and the control has a write handler",
     },
 };
 exports.SERVICES = {
-    EnergySite: {
-        uuid: serviceUuid("0001"),
-        name: "Energy Site",
-        chars: [
-            "PvPower",
-            "PvEnergyTotal",
-            "GridPower",
-            "GridEnergyImportTotal",
-            "GridEnergyExportTotal",
-            "GridPowerL1",
-            "GridPowerL2",
-            "GridPowerL3",
-            "GridCurrentL1",
-            "GridCurrentL2",
-            "GridCurrentL3",
-            "HomePower",
-            "AuxPower",
-            "BatteryPower",
-            "BatterySoc",
-            "BatteryCapacity",
-            "BatteryEnergyDischargeTotal",
-            "BatteryEnergyChargeTotal",
-            "BatteryConfigured",
-            "GridConfigured",
-            "GreenShareHome",
-            "GreenShareLoadpoints",
-            "TariffGrid",
-            "TariffFeedIn",
-            "Currency",
-            "LastUpdate",
-        ],
-    },
-    PvArray: {
-        uuid: serviceUuid("0002"),
-        name: "PV Array",
-        chars: ["MeterId", "MeterPower", "MeterEnergyTotal"],
-    },
-    AuxMeter: {
-        uuid: serviceUuid("0003"),
-        name: "Aux Meter",
-        chars: ["MeterId", "MeterPower"],
-    },
     LoadpointEnergy: {
         uuid: serviceUuid("0004"),
         name: "Loadpoint Energy",
@@ -173,12 +228,66 @@ exports.SERVICES = {
             "PlanTime",
             "PlanSoc",
             "PlanActive",
+            "LastUpdate",
         ],
     },
     ChargingStatistics: {
         uuid: serviceUuid("0005"),
         name: "Charging Statistics",
         chars: ["StatPeriod", "StatChargedEnergy", "StatSolarPercentage", "StatAvgPrice", "StatAvgCo2"],
+    },
+};
+/** Values of the Control Role characteristic, one per existing control service. */
+exports.CONTROL_ROLES = {
+    outlet: "loadpoint-enable",
+    limitLoadpoint: "loadpoint-limit-soc",
+    limitVehicle: "vehicle-limit-soc",
+    modeNow: "loadpoint-mode-now",
+    modePv: "loadpoint-mode-pv",
+    modeMinPv: "loadpoint-mode-minpv",
+};
+/**
+ * Retired UUIDs: site energy types that were defined during development of
+ * this feature and then dropped (site energy comes from a dedicated inverter
+ * plugin). They were never released. Never reuse them; services with a
+ * retired UUID are removed from cached accessories.
+ */
+exports.RETIRED = {
+    services: {
+        [serviceUuid("0001")]: "Energy Site",
+        [serviceUuid("0002")]: "PV Array",
+        [serviceUuid("0003")]: "Aux Meter",
+    },
+    characteristics: {
+        [charUuid("0001")]: "Meter Power",
+        [charUuid("0002")]: "Meter Energy Total",
+        [charUuid("0003")]: "Meter ID",
+        [charUuid("0010")]: "PV Power",
+        [charUuid("0011")]: "PV Energy Total",
+        [charUuid("0012")]: "Grid Power",
+        [charUuid("0013")]: "Grid Import Total",
+        [charUuid("0014")]: "Grid Export Total",
+        [charUuid("0015")]: "Grid Power L1",
+        [charUuid("0016")]: "Grid Power L2",
+        [charUuid("0017")]: "Grid Power L3",
+        [charUuid("0018")]: "Grid Current L1",
+        [charUuid("0019")]: "Grid Current L2",
+        [charUuid("001A")]: "Grid Current L3",
+        [charUuid("001B")]: "Home Power",
+        [charUuid("001C")]: "Aux Power",
+        [charUuid("001D")]: "Battery Power",
+        [charUuid("001E")]: "Battery SoC",
+        [charUuid("001F")]: "Battery Capacity",
+        [charUuid("0020")]: "Battery Discharge Total",
+        [charUuid("0021")]: "Battery Charge Total",
+        [charUuid("0022")]: "Battery Configured",
+        [charUuid("0023")]: "Grid Configured",
+        [charUuid("0024")]: "Green Share Home",
+        [charUuid("0025")]: "Green Share Loadpoints",
+        [charUuid("0026")]: "Tariff Grid",
+        [charUuid("0027")]: "Tariff Feed-In",
+        [charUuid("0028")]: "Currency",
+        [charUuid("0029")]: "Last Update",
     },
 };
 //# sourceMappingURL=definitions.js.map

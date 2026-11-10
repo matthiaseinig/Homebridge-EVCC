@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { SiteAccessory } from "../../src/accessories/siteAccessory.js";
 import type { EvccClient } from "../../src/api/client.js";
 import type { EvccState } from "../../src/api/types.js";
-import { CHARS, SERVICES } from "../../src/energy/definitions.js";
+import { MISSING_SNAPSHOTS_BEFORE_REMOVAL } from "../../src/energy/chargingStatistics.js";
+import { CHARS, RETIRED, SERVICES } from "../../src/energy/definitions.js";
 import { energyFixture } from "../energy/fixtures.js";
 import {
   MockPlatformAccessory,
@@ -35,7 +36,6 @@ function build(
     state,
     writable,
     energy: extra.energy,
-    now: () => 1_900_000_000_000,
   });
   return { acc, site, client, log };
 }
@@ -118,21 +118,38 @@ describe("SiteAccessory", () => {
     expect(() => site.dispose()).not.toThrow();
   });
 
-  it("adds the read-only energy services by default and keeps them current", () => {
+  it("adds Charging Statistics services by default and exposes no site energy", () => {
     const { acc, site } = build(energyFixture());
-    const energy = acc.services.find((s) => s.UUID === SERVICES.EnergySite.uuid)!;
-    expect(energy.subtype).toBe("energy-site");
-    expect(energy.getCharacteristic(CHARS.GridPower.uuid).value).toBe(-1250.1);
-    expect(energy.getCharacteristic(CHARS.LastUpdate.uuid).value).toBe(1_900_000_000);
-    expect(acc.services.filter((s) => s.UUID === SERVICES.PvArray.uuid)).toHaveLength(2);
-    expect(acc.services.filter((s) => s.UUID === SERVICES.ChargingStatistics.uuid)).toHaveLength(2);
+    const stats = acc.services.filter((s) => s.UUID === SERVICES.ChargingStatistics.uuid);
+    expect(stats.map((s) => s.subtype).sort()).toEqual(["stat:30d", "stat:total"]);
+    const total = stats.find((s) => s.subtype === "stat:total")!;
+    expect(total.getCharacteristic(CHARS.StatChargedEnergy.uuid).value).toBe(4000.25);
+    expect(acc.services.some((s) => s.UUID in RETIRED.services)).toBe(false);
 
-    site.applyState({ ...energyFixture(), grid: { power: 321 } } as EvccState);
-    expect(energy.getCharacteristic(CHARS.GridPower.uuid).value).toBe(321);
-    expect(energy.getCharacteristic(CHARS.GridPowerL1.uuid).value).toBe(0);
+    const next = energyFixture();
+    next.statistics = { ...next.statistics, total: { chargedKWh: 4001 } };
+    site.applyState(next);
+    expect(total.getCharacteristic(CHARS.StatChargedEnergy.uuid).value).toBe(4001);
   });
 
-  it("keeps the existing Home-app services unchanged next to the energy services", () => {
+  it("keeps a statistics service until its period is missing from several snapshots", () => {
+    const { acc, site } = build(energyFixture());
+    const without = { ...energyFixture(), statistics: {} } as EvccState;
+    const has30d = (): boolean => acc.services.some((s) => s.subtype === "stat:30d");
+    // Websocket-driven renders never count as a miss.
+    for (let i = 0; i < 10; i++) site.applyState(without);
+    expect(has30d()).toBe(true);
+    for (let i = 1; i < MISSING_SNAPSHOTS_BEFORE_REMOVAL; i++) site.applyState(without, true);
+    expect(has30d()).toBe(true);
+    // Reappearing resets the count.
+    site.applyState(energyFixture(), true);
+    for (let i = 1; i < MISSING_SNAPSHOTS_BEFORE_REMOVAL; i++) site.applyState(without, true);
+    expect(has30d()).toBe(true);
+    site.applyState(without, true);
+    expect(has30d()).toBe(false);
+  });
+
+  it("keeps the existing Home-app services unchanged", () => {
     const { acc } = build(energyFixture());
     const pv = acc.services.find((s) => s.subtype === "pv-power")!;
     expect(pv.getCharacteristic("CurrentAmbientLightLevel").value).toBe(3050);
@@ -140,10 +157,20 @@ describe("SiteAccessory", () => {
     expect(battery.getCharacteristic("BatteryLevel").value).toBe(56);
   });
 
-  it("with energy disabled adds no energy services and removes cached ones", () => {
+  it("removes services with retired site-energy UUIDs from a cached accessory", () => {
     const acc = new MockPlatformAccessory("Site", "uuid:site");
-    acc.services.push(new MockService(SERVICES.EnergySite.uuid, "Energy Site", "energy-site"));
-    acc.services.push(new MockService(SERVICES.PvArray.uuid, "Array A", "pv:pv1"));
+    for (const uuid of Object.keys(RETIRED.services)) {
+      acc.services.push(new MockService(uuid, "old", "x"));
+    }
+    build(energyFixture(), false, { acc });
+    expect(acc.services.some((s) => s.UUID in RETIRED.services)).toBe(false);
+  });
+
+  it("with energy disabled adds no custom services and removes cached ones", () => {
+    const acc = new MockPlatformAccessory("Site", "uuid:site");
+    acc.services.push(
+      new MockService(SERVICES.ChargingStatistics.uuid, "Charging Statistics total", "stat:total"),
+    );
     build(energyFixture(), false, { energy: false, acc });
     const custom = Object.values(SERVICES).map((s) => s.uuid as string);
     expect(acc.services.some((s) => custom.includes(s.UUID))).toBe(false);

@@ -86,6 +86,9 @@ export class MockService {
     }
     return c;
   }
+  removeCharacteristic(c: CharacteristicSpy): void {
+    this.charMap.delete(c.UUID);
+  }
   updateCharacteristic(id: CharacteristicId, value: unknown): MockService {
     this.getCharacteristic(id).updateValue(value);
     return this;

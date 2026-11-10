@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { LoadpointAccessory, type LoadpointAccessoryConfig } from "../../src/accessories/loadpointAccessory.js";
 import type { EvccClient } from "../../src/api/client.js";
 import type { LoadpointState } from "../../src/api/types.js";
-import { CHARS, SERVICES } from "../../src/energy/definitions.js";
+import { CHARS, CONTROL_ROLES, SERVICES } from "../../src/energy/definitions.js";
 import {
   MockPlatformAccessory,
   MockService,
@@ -48,6 +48,7 @@ function build(
       writable: true,
       ...cfg,
     },
+    now: () => 1_900_000_000_000,
   });
   return { acc, lp, client, log };
 }
@@ -265,5 +266,57 @@ describe("LoadpointAccessory", () => {
     );
     build({ title: "Garage" }, { energy: false }, acc);
     expect(acc.services.some((s) => s.UUID === SERVICES.LoadpointEnergy.uuid)).toBe(false);
+  });
+
+  it("updates Last Update on every loadpoint render", () => {
+    const { acc } = build({ title: "Garage" });
+    const svc = acc.services.find((s) => s.UUID === SERVICES.LoadpointEnergy.uuid)!;
+    expect(svc.getCharacteristic(CHARS.LastUpdate.uuid).value).toBe(1_900_000_000);
+  });
+
+  describe("control role tagging", () => {
+    const role = (acc: MockPlatformAccessory, subtype: string) => {
+      const svc = acc.services.find((s) => s.subtype === subtype)!;
+      return {
+        role: svc.charMap.get(CHARS.ControlRole.uuid)?.value,
+        enabled: svc.charMap.get(CHARS.ControlEnabled.uuid)?.value,
+      };
+    };
+
+    it("tags outlet and limit in outlet mode", () => {
+      const { acc } = build({ title: "Garage" }, { exposeVehicleLimit: true });
+      expect(role(acc, "outlet")).toEqual({ role: CONTROL_ROLES.outlet, enabled: true });
+      expect(role(acc, "limit-loadpoint")).toEqual({
+        role: CONTROL_ROLES.limitLoadpoint,
+        enabled: true,
+      });
+      expect(role(acc, "limit-vehicle")).toEqual({
+        role: CONTROL_ROLES.limitVehicle,
+        enabled: true,
+      });
+      expect(role(acc, "vehicle-battery").role).toBeUndefined();
+    });
+
+    it("tags the mode switches and marks the outlet as not writable in switches mode", () => {
+      const { acc } = build({ title: "Garage" }, { modeUi: "switches" });
+      expect(role(acc, "outlet")).toEqual({ role: CONTROL_ROLES.outlet, enabled: false });
+      expect(role(acc, "mode-now")).toEqual({ role: CONTROL_ROLES.modeNow, enabled: true });
+      expect(role(acc, "mode-pv")).toEqual({ role: CONTROL_ROLES.modePv, enabled: true });
+      expect(role(acc, "mode-minpv")).toEqual({ role: CONTROL_ROLES.modeMinPv, enabled: true });
+    });
+
+    it("reports every control as not enabled without a password", () => {
+      const { acc } = build({ title: "Garage" }, { writable: false });
+      expect(role(acc, "outlet").enabled).toBe(false);
+      expect(role(acc, "limit-loadpoint").enabled).toBe(false);
+    });
+
+    it("removes the tags when energy characteristics are disabled", () => {
+      const acc = new MockPlatformAccessory("LP", "uuid:lp");
+      build({ title: "Garage" }, {}, acc);
+      expect(role(acc, "outlet").role).toBe(CONTROL_ROLES.outlet);
+      build({ title: "Garage" }, { energy: false }, acc);
+      expect(role(acc, "outlet")).toEqual({ role: undefined, enabled: undefined });
+    });
   });
 });

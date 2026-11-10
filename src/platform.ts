@@ -32,7 +32,7 @@ export interface EvccPlatformConfig extends PlatformConfig {
   hideSite?: boolean;
   /** Skip the per-vehicle occupancy sensors. Default false. */
   hideVehiclePresence?: boolean;
-  /** Skip the read-only custom energy services (docs/zuhause-contract.md). Default false. */
+  /** Skip the read-only custom charging services and control tags (docs/zuhause-contract.md). Default false. */
   hideEnergyCharacteristics?: boolean;
   /** Verbose logging of WS frames and REST traffic. */
   debug?: boolean;
@@ -207,7 +207,7 @@ export class EvccPlatform implements DynamicPlatformPlugin {
     accessory.context.kind = "site";
 
     if (this.siteAccessory) {
-      this.siteAccessory.applyState(state);
+      this.siteAccessory.applyState(state, true);
     } else {
       this.siteAccessory = new SiteAccessory({
         api: this.api,

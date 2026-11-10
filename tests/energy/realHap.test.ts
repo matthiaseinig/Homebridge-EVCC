@@ -8,16 +8,21 @@ import * as hapNodejs from "hap-nodejs";
 import type { API, PlatformAccessory as PlatformAccessoryType, Service } from "homebridge";
 import { PlatformAccessory } from "homebridge/lib/platformAccessory.js";
 import { describe, expect, it } from "vitest";
+import { LoadpointAccessory } from "../../src/accessories/loadpointAccessory.js";
+import type { EvccClient } from "../../src/api/client.js";
 import type { EvccState } from "../../src/api/types.js";
-import { CHARS, SERVICES, type CharKey } from "../../src/energy/definitions.js";
+import {
+  ChargingStatisticsServices,
+  MISSING_SNAPSHOTS_BEFORE_REMOVAL,
+} from "../../src/energy/chargingStatistics.js";
+import { CHARS, RETIRED, SERVICES, type CharKey } from "../../src/energy/definitions.js";
 import { energyHapTypes } from "../../src/energy/hapTypes.js";
 import { LoadpointEnergyService } from "../../src/energy/loadpointEnergy.js";
-import { SiteEnergyServices } from "../../src/energy/siteEnergy.js";
+import { createMockLogger } from "../helpers/homebridge.js";
 import { FIXTURE_PLAN_EPOCH, energyFixture } from "./fixtures.js";
 
 const hap = hapNodejs as unknown as API["hap"];
 const api = { hap } as unknown as API;
-const NOW_MS = 1_900_000_000_000;
 
 function newAccessory(name: string): PlatformAccessoryType {
   return new PlatformAccessory(
@@ -26,11 +31,19 @@ function newAccessory(name: string): PlatformAccessoryType {
   ) as unknown as PlatformAccessoryType;
 }
 
-function collectWarnings(acc: PlatformAccessoryType): string[] {
+const OWN_UUIDS = new Set<string>(Object.values(CHARS).map((c) => c.uuid));
+
+/**
+ * Collect HAP warnings. With `ownOnly`, only warnings about this plugin's
+ * custom characteristics count (the existing services already trigger a HAP
+ * warning for ConfiguredName, which is outside this feature).
+ */
+function collectWarnings(acc: PlatformAccessoryType, ownOnly = false): string[] {
   const warnings: string[] = [];
   const hapAccessory = (acc as unknown as { _associatedHAPAccessory: hapNodejs.Accessory })
     ._associatedHAPAccessory;
   hapAccessory.on(hapNodejs.AccessoryEventTypes.CHARACTERISTIC_WARNING, (w) => {
+    if (ownOnly && !OWN_UUIDS.has(w.characteristic.UUID)) return;
     warnings.push(`${w.type}: ${w.message}`);
   });
   return warnings;
@@ -44,22 +57,22 @@ function find(acc: PlatformAccessoryType, uuid: string, subtype: string): Servic
   return acc.services.find((s) => s.UUID === uuid && s.subtype === subtype);
 }
 
-describe("custom energy types on real HAP-NodeJS", () => {
+describe("custom types on real HAP-NodeJS", () => {
   it("builds characteristics with the declared HAP metadata", () => {
     const types = energyHapTypes(hap);
-    const grid = new (types.char("GridPower"))();
-    expect(grid.UUID).toBe(CHARS.GridPower.uuid);
-    expect(grid.displayName).toBe("Grid Power");
-    expect(grid.props).toMatchObject({
+    const power = new (types.char("ChargePower"))();
+    expect(power.UUID).toBe(CHARS.ChargePower.uuid);
+    expect(power.displayName).toBe("Charge Power");
+    expect(power.props).toMatchObject({
       format: "float",
       perms: ["pr", "ev"],
       minValue: -1_000_000,
       maxValue: 1_000_000,
     });
-    expect(grid.props.unit).toBeUndefined();
-    expect(grid.value).toBe(0);
+    expect(power.props.unit).toBeUndefined();
+    expect(power.value).toBe(0);
 
-    const soc = new (types.char("BatterySoc"))();
+    const soc = new (types.char("VehicleSoc"))();
     expect(soc.props).toMatchObject({ unit: "percentage", minValue: 0, maxValue: 100 });
 
     const mode = new (types.char("ChargeMode"))();
@@ -75,11 +88,13 @@ describe("custom energy types on real HAP-NodeJS", () => {
   });
 
   it("caches the generated classes per HAP instance", () => {
-    expect(energyHapTypes(hap).char("PvPower")).toBe(energyHapTypes(hap).char("PvPower"));
-    expect(energyHapTypes(hap).service("PvArray")).toBe(energyHapTypes(hap).service("PvArray"));
+    expect(energyHapTypes(hap).char("ChargePower")).toBe(energyHapTypes(hap).char("ChargePower"));
+    expect(energyHapTypes(hap).service("ChargingStatistics")).toBe(
+      energyHapTypes(hap).service("ChargingStatistics"),
+    );
   });
 
-  it("no characteristic is writable", () => {
+  it("no custom characteristic is writable", () => {
     const types = energyHapTypes(hap);
     for (const key of Object.keys(CHARS) as CharKey[]) {
       const c = new (types.char(key))();
@@ -87,32 +102,18 @@ describe("custom energy types on real HAP-NodeJS", () => {
     }
   });
 
-  it("applies the fixture to the site accessory without any HAP warning", () => {
+  it("applies charging statistics without any HAP warning", () => {
     const acc = newAccessory("site");
     const warnings = collectWarnings(acc);
-    new SiteEnergyServices(api, acc, () => NOW_MS).apply(energyFixture());
-
-    const site = find(acc, SERVICES.EnergySite.uuid, "energy-site");
-    expect(site).toBeDefined();
-    expect(value(site, "GridPower")).toBe(-1250.1);
-    expect(value(site, "GridPowerL3")).toBe(-425);
-    expect(value(site, "GridCurrentL1")).toBe(-1.74);
-    expect(value(site, "BatterySoc")).toBe(55.6);
-    expect(value(site, "BatteryPower")).toBe(-800);
-    expect(value(site, "GreenShareHome")).toBe(87.5);
-    expect(value(site, "Currency")).toBe("EUR");
-    expect(value(site, "LastUpdate")).toBe(1_900_000_000);
-
-    const pv1 = find(acc, SERVICES.PvArray.uuid, "pv:pv1");
-    expect(value(pv1, "MeterPower")).toBe(2100.4);
-    expect(value(pv1, "MeterEnergyTotal")).toBe(1234.568);
-    expect(value(pv1, "MeterId")).toBe("pv1");
-    expect(pv1?.getCharacteristic(hap.Characteristic.Name).value).toBe("Array A");
-
-    expect(find(acc, SERVICES.AuxMeter.uuid, "aux:aux1")).toBeDefined();
-    expect(
-      value(find(acc, SERVICES.ChargingStatistics.uuid, "stat:total"), "StatChargedEnergy"),
-    ).toBe(4000.25);
+    new ChargingStatisticsServices(api, acc).apply(energyFixture());
+    const total = find(acc, SERVICES.ChargingStatistics.uuid, "stat:total");
+    expect(value(total, "StatPeriod")).toBe("total");
+    expect(value(total, "StatChargedEnergy")).toBe(4000.25);
+    expect(value(total, "StatAvgCo2")).toBe(250);
+    expect(total?.getCharacteristic(hap.Characteristic.Name).value).toBe(
+      "Charging Statistics total",
+    );
+    expect(find(acc, SERVICES.ChargingStatistics.uuid, "stat:30d")).toBeDefined();
     expect(warnings).toEqual([]);
   });
 
@@ -128,65 +129,112 @@ describe("custom energy types on real HAP-NodeJS", () => {
     expect(warnings).toEqual([]);
   });
 
+  it("tags the standard control services with role and enabled flag, without warnings", () => {
+    const acc = newAccessory("controls");
+    const warnings = collectWarnings(acc, true);
+    new LoadpointAccessory({
+      api,
+      log: createMockLogger(),
+      client: {} as EvccClient,
+      accessory: acc,
+      loadpointId: 0,
+      state: energyFixture().loadpoints![0],
+      config: {
+        modeUi: "switches",
+        defaultMode: "pv",
+        exposeVehicleLimit: true,
+        writable: true,
+      },
+    });
+    const role = (svc: Service): unknown =>
+      svc.characteristics.find((c) => c.UUID === CHARS.ControlRole.uuid)?.value;
+    const roles = acc.services.map(role).filter((r) => r !== undefined);
+    expect(roles.sort()).toEqual([
+      "loadpoint-enable",
+      "loadpoint-limit-soc",
+      "loadpoint-mode-minpv",
+      "loadpoint-mode-now",
+      "loadpoint-mode-pv",
+      "vehicle-limit-soc",
+    ]);
+    const outlet = acc.services.find((s) => role(s) === "loadpoint-enable")!;
+    const enabled = (svc: Service): unknown =>
+      svc.characteristics.find((c) => c.UUID === CHARS.ControlEnabled.uuid)?.value;
+    // In "switches" mode the outlet has no write handler; the switches do.
+    expect(enabled(outlet)).toBe(false);
+    expect(enabled(acc.services.find((s) => role(s) === "loadpoint-mode-now")!)).toBe(true);
+    expect(enabled(acc.services.find((s) => role(s) === "loadpoint-limit-soc")!)).toBe(true);
+    expect(warnings).toEqual([]);
+  });
+
   it("survives the Homebridge cache round trip without duplicating services", () => {
     const acc = newAccessory("cached");
-    new SiteEnergyServices(api, acc, () => NOW_MS).apply(energyFixture());
+    new ChargingStatisticsServices(api, acc).apply(energyFixture());
+    new LoadpointEnergyService(api, acc).apply(energyFixture().loadpoints![0], "Loadpoint A");
     const before = acc.services.length;
 
     const json = JSON.parse(JSON.stringify(PlatformAccessory.serialize(acc as never)));
     const restored = PlatformAccessory.deserialize(json) as unknown as PlatformAccessoryType;
     const warnings = collectWarnings(restored);
 
-    const updated = energyFixture();
-    updated.grid = { ...updated.grid, power: 777 };
-    new SiteEnergyServices(api, restored, () => NOW_MS).apply(updated);
+    const lp = { ...energyFixture().loadpoints![0], chargePower: 777 };
+    new ChargingStatisticsServices(api, restored).apply(energyFixture());
+    new LoadpointEnergyService(api, restored).apply(lp, "Loadpoint A");
 
     expect(restored.services.length).toBe(before);
-    const site = find(restored, SERVICES.EnergySite.uuid, "energy-site")!;
-    expect(value(site, "GridPower")).toBe(777);
-    expect(
-      site.characteristics.filter((c) => c.UUID !== hap.Characteristic.Name.UUID),
-    ).toHaveLength(SERVICES.EnergySite.chars.length);
+    const svc = find(restored, SERVICES.LoadpointEnergy.uuid, "loadpoint-energy")!;
+    expect(value(svc, "ChargePower")).toBe(777);
+    expect(svc.characteristics.filter((c) => c.UUID !== hap.Characteristic.Name.UUID)).toHaveLength(
+      SERVICES.LoadpointEnergy.chars.length,
+    );
     expect(warnings).toEqual([]);
   });
 
   it("adds characteristics missing from a cached service and re-applies props", () => {
     const acc = newAccessory("old");
     // Simulate a service cached by an older plugin version: right UUID, only one characteristic.
-    const old = new hap.Service("PV Array", SERVICES.PvArray.uuid, "pv:pv1");
-    const stale = old.addCharacteristic(energyHapTypes(hap).char("MeterPower"));
+    const old = new hap.Service(
+      "Loadpoint A Energy",
+      SERVICES.LoadpointEnergy.uuid,
+      "loadpoint-energy",
+    );
+    const stale = old.addCharacteristic(energyHapTypes(hap).char("ChargePower"));
     stale.setProps({ minValue: 0, maxValue: 10 });
     acc.addService(old);
     const warnings = collectWarnings(acc);
 
-    new SiteEnergyServices(api, acc, () => NOW_MS).apply(energyFixture());
+    new LoadpointEnergyService(api, acc).apply(energyFixture().loadpoints![0], "Loadpoint A");
 
-    const pv1 = find(acc, SERVICES.PvArray.uuid, "pv:pv1")!;
-    expect(acc.services.filter((s) => s.UUID === SERVICES.PvArray.uuid)).toHaveLength(2);
-    expect(pv1.getCharacteristic(energyHapTypes(hap).char("MeterPower")).props.maxValue).toBe(
+    const svc = find(acc, SERVICES.LoadpointEnergy.uuid, "loadpoint-energy")!;
+    expect(acc.services.filter((s) => s.UUID === SERVICES.LoadpointEnergy.uuid)).toHaveLength(1);
+    expect(svc.getCharacteristic(energyHapTypes(hap).char("ChargePower")).props.maxValue).toBe(
       1_000_000,
     );
-    expect(value(pv1, "MeterPower")).toBe(2100.4);
-    expect(value(pv1, "MeterEnergyTotal")).toBe(1234.568);
+    expect(value(svc, "ChargePower")).toBe(3700);
+    expect(value(svc, "TodayEnergy")).toBe(7.65);
     expect(warnings).toEqual([]);
   });
 
-  it("removes services for meters and periods that disappear", () => {
+  it("removes statistics periods that stay absent, and everything on removeAll", () => {
     const acc = newAccessory("prune");
-    const site = new SiteEnergyServices(api, acc, () => NOW_MS);
-    site.apply(energyFixture());
+    const stats = new ChargingStatisticsServices(api, acc);
+    stats.apply(energyFixture(), true);
     const fewer = energyFixture() as EvccState;
-    fewer.pv = fewer.pv!.slice(0, 1);
-    fewer.aux = [];
     fewer.statistics = { total: fewer.statistics!.total };
-    site.apply(fewer);
-    expect(find(acc, SERVICES.PvArray.uuid, "pv:pv2")).toBeUndefined();
-    expect(find(acc, SERVICES.PvArray.uuid, "pv:pv1")).toBeDefined();
-    expect(acc.services.some((s) => s.UUID === SERVICES.AuxMeter.uuid)).toBe(false);
+    for (let i = 0; i < MISSING_SNAPSHOTS_BEFORE_REMOVAL; i++) stats.apply(fewer, true);
     expect(find(acc, SERVICES.ChargingStatistics.uuid, "stat:30d")).toBeUndefined();
+    expect(find(acc, SERVICES.ChargingStatistics.uuid, "stat:total")).toBeDefined();
+    stats.removeAll();
+    expect(acc.services.some((s) => s.UUID === SERVICES.ChargingStatistics.uuid)).toBe(false);
+  });
 
-    site.removeAll();
-    const customUuids = Object.values(SERVICES).map((s) => s.uuid as string);
-    expect(acc.services.some((s) => customUuids.includes(s.UUID))).toBe(false);
+  it("removes services with retired site-energy UUIDs from a cached accessory", () => {
+    const acc = newAccessory("retired");
+    for (const uuid of Object.keys(RETIRED.services)) {
+      acc.addService(new hap.Service("old", uuid, "x"));
+    }
+    new ChargingStatisticsServices(api, acc);
+    expect(acc.services.some((s) => s.UUID in RETIRED.services)).toBe(false);
+    expect(acc.services.some((s) => s.UUID === hap.Service.AccessoryInformation.UUID)).toBe(true);
   });
 });

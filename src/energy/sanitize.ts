@@ -5,7 +5,7 @@ import type { CharDef, RawValue } from "./definitions.js";
  * warnings: numbers are rounded to the declared decimals and clamped to the
  * declared range, strings are truncated to `maxLen`. A value EVCC did not
  * report becomes the neutral default (0, false or ""), as documented in the
- * contract; apps detect staleness through the site's Last Update timestamp.
+ * contract.
  */
 export function sanitize(def: CharDef, raw: RawValue): number | string | boolean {
   switch (def.format) {
@@ -40,11 +40,6 @@ export function toEpochSeconds(value: unknown): number {
 /** Watt-hours to kilowatt-hours; undefined stays undefined. */
 export function whToKwh(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value / 1000 : undefined;
-}
-
-/** A 0..1 share to percent; undefined stays undefined. */
-export function shareToPercent(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value * 100 : undefined;
 }
 
 export function num(value: unknown): number | undefined {

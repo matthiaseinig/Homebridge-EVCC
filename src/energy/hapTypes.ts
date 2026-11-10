@@ -8,6 +8,7 @@ import type {
 } from "homebridge";
 import {
   CHARS,
+  RETIRED,
   SERVICES,
   type CharDef,
   type CharKey,
@@ -138,18 +139,43 @@ export function ensureEnergyService(
     servicesOfType(accessory, ctor).find((s) => s.subtype === subtype) ??
     accessory.addService(ctor, name, subtype);
   // The characteristic set only needs checking once per service instance; the
-  // site accessory re-renders on every websocket frame.
+  // accessories re-render on every websocket frame.
   if (!verifiedServices.has(svc)) {
-    for (const k of SERVICES[key].chars) {
-      const c = types.char(k);
-      const present = svc.characteristics.some((x) => x.UUID === c.UUID);
-      const characteristic = present ? svc.getCharacteristic(c) : svc.addCharacteristic(c);
-      characteristic.setProps(types.props(k));
-    }
+    for (const k of SERVICES[key].chars) ensureCustomCharacteristic(hap, svc, k);
     verifiedServices.add(svc);
   }
   setServiceName(hap, svc, name);
   return svc;
+}
+
+/**
+ * Make sure `svc` (custom or standard, fresh or restored from the cache)
+ * carries the custom characteristic `key` with its declared props. Adding it
+ * explicitly avoids HAP's "not in required or optional characteristics"
+ * warning.
+ */
+export function ensureCustomCharacteristic(hap: Hap, svc: Service, key: CharKey): Characteristic {
+  const types = energyHapTypes(hap);
+  const c = types.char(key);
+  const present = svc.characteristics.some((x) => x.UUID === c.UUID);
+  const characteristic = present ? svc.getCharacteristic(c) : svc.addCharacteristic(c);
+  characteristic.setProps(types.props(key));
+  return characteristic;
+}
+
+/** Remove the custom characteristic `key` from `svc` if it is present. */
+export function removeCustomCharacteristic(svc: Service, key: CharKey): void {
+  const uuid = CHARS[key].uuid;
+  const existing = svc.characteristics.find((x) => x.UUID === uuid);
+  if (existing) svc.removeCharacteristic(existing);
+}
+
+/** Remove services whose type UUID is retired (see RETIRED in definitions.ts). */
+export function pruneRetiredServices(accessory: PlatformAccessory): void {
+  const services = (accessory as PlatformAccessory & { services: Service[] }).services;
+  for (const svc of [...services]) {
+    if (svc.UUID in RETIRED.services) accessory.removeService(svc);
+  }
 }
 
 /** Keep the HAP Name characteristic (and the cached display name) in sync. */

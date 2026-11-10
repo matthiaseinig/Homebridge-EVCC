@@ -150,7 +150,7 @@ class EvccPlatform {
         }
         accessory.context.kind = "site";
         if (this.siteAccessory) {
-            this.siteAccessory.applyState(state);
+            this.siteAccessory.applyState(state, true);
         }
         else {
             this.siteAccessory = new siteAccessory_js_1.SiteAccessory({

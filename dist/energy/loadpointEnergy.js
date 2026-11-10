@@ -8,13 +8,15 @@ exports.SUBTYPE_LOADPOINT_ENERGY = "loadpoint-energy";
 class LoadpointEnergyService {
     api;
     accessory;
-    constructor(api, accessory) {
+    now;
+    constructor(api, accessory, now = Date.now) {
         this.api = api;
         this.accessory = accessory;
+        this.now = now;
     }
     apply(state, title) {
         const svc = (0, hapTypes_js_1.ensureEnergyService)(this.api.hap, this.accessory, "LoadpointEnergy", `${title} Energy`, exports.SUBTYPE_LOADPOINT_ENERGY);
-        (0, hapTypes_js_1.applyValues)(this.api.hap, svc, (0, extract_js_1.loadpointValues)(state));
+        (0, hapTypes_js_1.applyValues)(this.api.hap, svc, (0, extract_js_1.loadpointValues)(state, Math.floor(this.now() / 1000)));
     }
     remove() {
         (0, hapTypes_js_1.pruneServices)(this.api.hap, this.accessory, "LoadpointEnergy", new Set());

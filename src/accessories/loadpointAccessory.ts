@@ -1,6 +1,11 @@
 import type { API, Logging, PlatformAccessory, Service, WithUUID } from "homebridge";
 import type { EvccClient } from "../api/client.js";
 import type { ChargeMode, LoadpointState } from "../api/types.js";
+import { CONTROL_ROLES } from "../energy/definitions.js";
+import {
+  ensureCustomCharacteristic,
+  removeCustomCharacteristic,
+} from "../energy/hapTypes.js";
 import { LoadpointEnergyService } from "../energy/loadpointEnergy.js";
 import { applyServiceName } from "../util/applyServiceName.js";
 import { clampPercent, powerToLux } from "../util/powerToLux.js";
@@ -28,6 +33,8 @@ export interface LoadpointAccessoryDeps {
   loadpointId: number; // 0-based for WS/state, 1-based for REST API
   state: LoadpointState;
   config: LoadpointAccessoryConfig;
+  /** Clock for the Last Update characteristic; injectable for tests. */
+  now?: () => number;
 }
 
 const SUBTYPE_OUTLET = "outlet";
@@ -48,6 +55,12 @@ const MODE_SUBTYPES: Record<ChargeMode, string | null> = {
 
 const SWITCH_MODES: ChargeMode[] = ["now", "pv", "minpv"];
 
+const MODE_ROLES: Record<string, string> = {
+  now: CONTROL_ROLES.modeNow,
+  pv: CONTROL_ROLES.modePv,
+  minpv: CONTROL_ROLES.modeMinPv,
+};
+
 /**
  * Single loadpoint exposed as one HomeKit accessory with a stack of services:
  *
@@ -59,6 +72,11 @@ const SWITCH_MODES: ChargeMode[] = ["now", "pv", "minpv"];
  *   - LightSensor       "<title> Power"             CurrentAmbientLightLevel = chargePower (W → lux)
  *   - Switch ×3         "<title> Now"/"PV"/"Min+PV" optional, when modeUi = "switches"
  *   - Custom service    "<title> Energy"            read-only Loadpoint Energy characteristics
+ *
+ * Unless energy characteristics are disabled, every control service above
+ * also carries the read-only custom Control Role and Control Enabled
+ * characteristics so apps can find and steer the controls without relying on
+ * service names (docs/zuhause-contract.md).
  */
 export class LoadpointAccessory {
   private readonly api: API;
@@ -71,6 +89,7 @@ export class LoadpointAccessory {
 
   private outletService?: Service;
   private limitLoadpointService?: Service;
+  private limitVehicleService?: Service;
   private batteryService?: Service;
   private powerService?: Service;
   private readonly modeSwitches = new Map<ChargeMode, Service>();
@@ -95,8 +114,9 @@ export class LoadpointAccessory {
     if (this.config.modeUi === "switches") this.configureModeSwitches();
 
     this.energyEnabled = this.config.energy ?? true;
-    this.energy = new LoadpointEnergyService(this.api, this.accessory);
+    this.energy = new LoadpointEnergyService(this.api, this.accessory, deps.now);
     if (!this.energyEnabled) this.energy.remove();
+    this.syncControlRoles();
 
     this.applyState(this.state);
   }
@@ -223,6 +243,7 @@ export class LoadpointAccessory {
       `${this.title()} Vehicle Limit`,
       SUBTYPE_LIMIT_VEHICLE,
     );
+    this.limitVehicleService = svc;
 
     if (this.canWrite()) {
       svc.getCharacteristic(C.TargetPosition).onSet(async (value) => {
@@ -287,6 +308,29 @@ export class LoadpointAccessory {
         return `${this.title()} Min+PV`;
       default:
         return `${this.title()} ${mode}`;
+    }
+  }
+
+  /** Tag each control service with its role and whether writes reach EVCC. */
+  private syncControlRoles(): void {
+    const controls: Array<[Service | undefined, string, boolean]> = [
+      [this.outletService, CONTROL_ROLES.outlet, this.canWrite() && this.config.modeUi !== "switches"],
+      [this.limitLoadpointService, CONTROL_ROLES.limitLoadpoint, this.canWrite()],
+      [this.limitVehicleService, CONTROL_ROLES.limitVehicle, this.canWrite()],
+      ...[...this.modeSwitches].map(
+        ([mode, svc]): [Service, string, boolean] => [svc, MODE_ROLES[mode], this.canWrite()],
+      ),
+    ];
+    const hap = this.api.hap;
+    for (const [svc, role, enabled] of controls) {
+      if (!svc) continue;
+      if (this.energyEnabled) {
+        ensureCustomCharacteristic(hap, svc, "ControlRole").updateValue(role);
+        ensureCustomCharacteristic(hap, svc, "ControlEnabled").updateValue(enabled);
+      } else {
+        removeCustomCharacteristic(svc, "ControlRole");
+        removeCustomCharacteristic(svc, "ControlEnabled");
+      }
     }
   }
 

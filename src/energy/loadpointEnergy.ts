@@ -10,6 +10,7 @@ export class LoadpointEnergyService {
   constructor(
     private readonly api: API,
     private readonly accessory: PlatformAccessory,
+    private readonly now: () => number = Date.now,
   ) {}
 
   apply(state: LoadpointState, title: string): void {
@@ -20,7 +21,7 @@ export class LoadpointEnergyService {
       `${title} Energy`,
       SUBTYPE_LOADPOINT_ENERGY,
     );
-    applyValues(this.api.hap, svc, loadpointValues(state));
+    applyValues(this.api.hap, svc, loadpointValues(state, Math.floor(this.now() / 1000)));
   }
 
   remove(): void {

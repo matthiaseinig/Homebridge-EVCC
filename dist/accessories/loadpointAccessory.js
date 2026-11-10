@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LoadpointAccessory = void 0;
+const definitions_js_1 = require("../energy/definitions.js");
+const hapTypes_js_1 = require("../energy/hapTypes.js");
 const loadpointEnergy_js_1 = require("../energy/loadpointEnergy.js");
 const applyServiceName_js_1 = require("../util/applyServiceName.js");
 const powerToLux_js_1 = require("../util/powerToLux.js");
@@ -19,6 +21,11 @@ const MODE_SUBTYPES = {
     minpv: SUBTYPE_MODE_MINPV,
 };
 const SWITCH_MODES = ["now", "pv", "minpv"];
+const MODE_ROLES = {
+    now: definitions_js_1.CONTROL_ROLES.modeNow,
+    pv: definitions_js_1.CONTROL_ROLES.modePv,
+    minpv: definitions_js_1.CONTROL_ROLES.modeMinPv,
+};
 /**
  * Single loadpoint exposed as one HomeKit accessory with a stack of services:
  *
@@ -30,6 +37,11 @@ const SWITCH_MODES = ["now", "pv", "minpv"];
  *   - LightSensor       "<title> Power"             CurrentAmbientLightLevel = chargePower (W → lux)
  *   - Switch ×3         "<title> Now"/"PV"/"Min+PV" optional, when modeUi = "switches"
  *   - Custom service    "<title> Energy"            read-only Loadpoint Energy characteristics
+ *
+ * Unless energy characteristics are disabled, every control service above
+ * also carries the read-only custom Control Role and Control Enabled
+ * characteristics so apps can find and steer the controls without relying on
+ * service names (docs/zuhause-contract.md).
  */
 class LoadpointAccessory {
     api;
@@ -41,6 +53,7 @@ class LoadpointAccessory {
     state;
     outletService;
     limitLoadpointService;
+    limitVehicleService;
     batteryService;
     powerService;
     modeSwitches = new Map();
@@ -64,9 +77,10 @@ class LoadpointAccessory {
         if (this.config.modeUi === "switches")
             this.configureModeSwitches();
         this.energyEnabled = this.config.energy ?? true;
-        this.energy = new loadpointEnergy_js_1.LoadpointEnergyService(this.api, this.accessory);
+        this.energy = new loadpointEnergy_js_1.LoadpointEnergyService(this.api, this.accessory, deps.now);
         if (!this.energyEnabled)
             this.energy.remove();
+        this.syncControlRoles();
         this.applyState(this.state);
     }
     /** Re-render every service from a fresh loadpoint state. */
@@ -159,6 +173,7 @@ class LoadpointAccessory {
         const Service = this.api.hap.Service;
         const C = this.api.hap.Characteristic;
         const svc = this.ensureService(Service.WindowCovering, `${this.title()} Vehicle Limit`, SUBTYPE_LIMIT_VEHICLE);
+        this.limitVehicleService = svc;
         if (this.canWrite()) {
             svc.getCharacteristic(C.TargetPosition).onSet(async (value) => {
                 if (!this.state.vehicleName)
@@ -211,6 +226,28 @@ class LoadpointAccessory {
                 return `${this.title()} Min+PV`;
             default:
                 return `${this.title()} ${mode}`;
+        }
+    }
+    /** Tag each control service with its role and whether writes reach EVCC. */
+    syncControlRoles() {
+        const controls = [
+            [this.outletService, definitions_js_1.CONTROL_ROLES.outlet, this.canWrite() && this.config.modeUi !== "switches"],
+            [this.limitLoadpointService, definitions_js_1.CONTROL_ROLES.limitLoadpoint, this.canWrite()],
+            [this.limitVehicleService, definitions_js_1.CONTROL_ROLES.limitVehicle, this.canWrite()],
+            ...[...this.modeSwitches].map(([mode, svc]) => [svc, MODE_ROLES[mode], this.canWrite()]),
+        ];
+        const hap = this.api.hap;
+        for (const [svc, role, enabled] of controls) {
+            if (!svc)
+                continue;
+            if (this.energyEnabled) {
+                (0, hapTypes_js_1.ensureCustomCharacteristic)(hap, svc, "ControlRole").updateValue(role);
+                (0, hapTypes_js_1.ensureCustomCharacteristic)(hap, svc, "ControlEnabled").updateValue(enabled);
+            }
+            else {
+                (0, hapTypes_js_1.removeCustomCharacteristic)(svc, "ControlRole");
+                (0, hapTypes_js_1.removeCustomCharacteristic)(svc, "ControlEnabled");
+            }
         }
     }
     canWrite() {

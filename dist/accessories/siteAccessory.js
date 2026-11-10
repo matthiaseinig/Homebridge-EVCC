@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SiteAccessory = void 0;
-const siteEnergy_js_1 = require("../energy/siteEnergy.js");
+const chargingStatistics_js_1 = require("../energy/chargingStatistics.js");
 const applyServiceName_js_1 = require("../util/applyServiceName.js");
 const powerToLux_js_1 = require("../util/powerToLux.js");
 const SUBTYPE_BATTERY = "home-battery";
@@ -27,8 +27,8 @@ const BATTERY_MODE_SUBTYPES = {
  *   - ContactSensor     "Grid Direction"      open = importing, closed = exporting (grid.power < 0)
  *   - LightSensor       "Home Consumption"    lux = homePower
  *   - Switch ×3         "Battery Normal/Hold/Charge"  (only if writable)
- *   - Custom energy services (Energy Site, PV Array, Aux Meter, Charging
- *     Statistics), read-only, unless disabled (see SiteEnergyServices)
+ *   - Custom "Charging Statistics" services, read-only, unless disabled
+ *     (see ChargingStatisticsServices)
  */
 class SiteAccessory {
     api;
@@ -60,12 +60,14 @@ class SiteAccessory {
         if (this.writable)
             this.configureBatteryModeSwitches();
         this.energyEnabled = deps.energy ?? true;
-        this.energy = new siteEnergy_js_1.SiteEnergyServices(this.api, this.accessory, deps.now);
+        this.energy = new chargingStatistics_js_1.ChargingStatisticsServices(this.api, this.accessory);
         if (!this.energyEnabled)
             this.energy.removeAll();
-        this.applyState(this.state);
+        // The platform constructs this accessory from a full REST snapshot.
+        this.applyState(this.state, true);
     }
-    applyState(state) {
+    /** Re-render from `state`; `snapshot` is true for a full REST snapshot. */
+    applyState(state, snapshot = false) {
         this.state = state;
         const C = this.api.hap.Characteristic;
         const battery = state.battery ?? {};
@@ -103,7 +105,7 @@ class SiteAccessory {
             svc.updateCharacteristic(C.On, mode === m);
         }
         if (this.energyEnabled)
-            this.energy.apply(state);
+            this.energy.apply(state, snapshot);
     }
     dispose() {
         // Nothing to detach.
