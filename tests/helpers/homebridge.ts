@@ -14,6 +14,9 @@ export function createMockLogger(): Logging {
 }
 
 export interface CharacteristicSpy {
+  UUID: string;
+  displayName?: string;
+  props?: Record<string, unknown>;
   value: unknown;
   onSetHandler?: (value: unknown) => void | Promise<void>;
   onGetHandler?: () => unknown;
@@ -23,26 +26,50 @@ export interface CharacteristicSpy {
   onGet: (cb: () => unknown) => CharacteristicSpy;
 }
 
+/** A characteristic id as the code passes it: a standard name string or a custom constructor. */
+export type CharacteristicId = string | { UUID: string; new (): unknown };
+
+function charKey(id: CharacteristicId): string {
+  return typeof id === "string" ? id : id.UUID;
+}
+
 export class MockService {
-  characteristics = new Map<string, CharacteristicSpy>();
+  readonly charMap = new Map<string, CharacteristicSpy>();
   UUID: string;
+  displayName: string;
   constructor(public type: string, public name: string, public subtype?: string) {
     this.UUID = type;
+    this.displayName = name;
   }
-  setCharacteristic(id: string, value: unknown): MockService {
+  /** Array view, like HAP-NodeJS `Service.characteristics`. */
+  get characteristics(): CharacteristicSpy[] {
+    return [...this.charMap.values()];
+  }
+  setCharacteristic(id: CharacteristicId, value: unknown): MockService {
     const c = this.getCharacteristic(id);
     c.value = value;
     return this;
   }
-  getCharacteristic(id: string): CharacteristicSpy {
-    let c = this.characteristics.get(id);
+  addCharacteristic(ctor: { UUID: string; new (): unknown }): CharacteristicSpy {
+    const instance = new ctor() as { displayName?: string; props?: Record<string, unknown>; value?: unknown };
+    const spy = this.getCharacteristic(ctor);
+    spy.displayName = instance.displayName;
+    spy.props = instance.props;
+    spy.value = instance.value;
+    return spy;
+  }
+  getCharacteristic(id: CharacteristicId): CharacteristicSpy {
+    const key = charKey(id);
+    let c = this.charMap.get(key);
     if (!c) {
       const spy: CharacteristicSpy = {
+        UUID: key,
         value: undefined,
         updateValue(v: unknown): void {
           spy.value = v;
         },
-        setProps(_props): CharacteristicSpy {
+        setProps(props): CharacteristicSpy {
+          spy.props = { ...(spy.props ?? {}), ...props };
           return spy;
         },
         onSet(cb): CharacteristicSpy {
@@ -55,11 +82,11 @@ export class MockService {
         },
       };
       c = spy;
-      this.characteristics.set(id, c);
+      this.charMap.set(key, c);
     }
     return c;
   }
-  updateCharacteristic(id: string, value: unknown): MockService {
+  updateCharacteristic(id: CharacteristicId, value: unknown): MockService {
     this.getCharacteristic(id).updateValue(value);
     return this;
   }
@@ -82,6 +109,13 @@ export class MockPlatformAccessory {
     );
   }
   addService(type: unknown, name?: string, subtype?: string): MockService {
+    if (typeof type === "function") {
+      // Custom service class (extends the mock hap.Service).
+      const Ctor = type as new (displayName?: string, subtype?: string) => MockService;
+      const custom = new Ctor(name, subtype);
+      this.services.push(custom);
+      return custom;
+    }
     const typeName =
       typeof type === "string"
         ? type
@@ -131,13 +165,40 @@ const serviceNames = [
   "ContactSensor",
 ];
 
+/** Base class for custom characteristics, mirroring HAP-NodeJS's constructor shape. */
+export class MockHapCharacteristic {
+  value: unknown = null;
+  constructor(
+    public displayName: string,
+    public UUID: string,
+    public props: Record<string, unknown>,
+  ) {}
+}
+
+/** Base class for custom services, mirroring HAP-NodeJS's constructor shape. */
+export class MockHapService extends MockService {
+  constructor(displayName: string | undefined, UUID: string, subtype?: string) {
+    super(UUID, displayName ?? "", subtype);
+  }
+}
+
 function buildHapStubs() {
-  const Service: Record<string, { UUID: string; name: string }> = {};
+  const Service = class extends MockHapService {} as unknown as Record<
+    string,
+    { UUID: string; name: string }
+  >;
   for (const n of serviceNames) Service[n] = { UUID: n, name: n };
-  const Characteristic: Record<string, string> = {};
+  const Characteristic = class extends MockHapCharacteristic {} as unknown as Record<
+    string,
+    string
+  >;
   for (const n of characteristicNames) Characteristic[n] = n;
   return { Service, Characteristic };
 }
+
+const Formats = { FLOAT: "float", UINT32: "uint32", BOOL: "bool", STRING: "string" };
+const Perms = { PAIRED_READ: "pr", PAIRED_WRITE: "pw", NOTIFY: "ev" };
+const Units = { PERCENTAGE: "percentage" };
 
 export interface MockApi extends API {
   emit(event: string, ...args: unknown[]): void;
@@ -155,6 +216,9 @@ export function createMockApi(): MockApi {
     hap: {
       Service,
       Characteristic,
+      Formats,
+      Perms,
+      Units,
       uuid: { generate: (id: string) => `uuid:${id}` },
       Categories: { OTHER: 1 },
     },

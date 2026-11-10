@@ -1,6 +1,7 @@
 import type { API, Logging, PlatformAccessory, Service, WithUUID } from "homebridge";
 import type { EvccClient } from "../api/client.js";
 import type { ChargeMode, LoadpointState } from "../api/types.js";
+import { LoadpointEnergyService } from "../energy/loadpointEnergy.js";
 import { applyServiceName } from "../util/applyServiceName.js";
 import { clampPercent, powerToLux } from "../util/powerToLux.js";
 
@@ -15,6 +16,8 @@ export interface LoadpointAccessoryConfig {
   exposeVehicleLimit: boolean;
   /** Whether write-back to EVCC is allowed (i.e. password configured & login succeeded). */
   writable: boolean;
+  /** Expose the read-only custom Loadpoint Energy service (docs/zuhause-contract.md). Default true. */
+  energy?: boolean;
 }
 
 export interface LoadpointAccessoryDeps {
@@ -55,6 +58,7 @@ const SWITCH_MODES: ChargeMode[] = ["now", "pv", "minpv"];
  *   - BatteryService    "<title> Vehicle"           BatteryLevel = vehicleSoc, ChargingState = charging
  *   - LightSensor       "<title> Power"             CurrentAmbientLightLevel = chargePower (W → lux)
  *   - Switch ×3         "<title> Now"/"PV"/"Min+PV" optional, when modeUi = "switches"
+ *   - Custom service    "<title> Energy"            read-only Loadpoint Energy characteristics
  */
 export class LoadpointAccessory {
   private readonly api: API;
@@ -70,6 +74,8 @@ export class LoadpointAccessory {
   private batteryService?: Service;
   private powerService?: Service;
   private readonly modeSwitches = new Map<ChargeMode, Service>();
+  private readonly energy: LoadpointEnergyService;
+  private readonly energyEnabled: boolean;
 
   constructor(deps: LoadpointAccessoryDeps) {
     this.api = deps.api;
@@ -87,6 +93,10 @@ export class LoadpointAccessory {
     this.configureVehicleBattery();
     this.configurePower();
     if (this.config.modeUi === "switches") this.configureModeSwitches();
+
+    this.energyEnabled = this.config.energy ?? true;
+    this.energy = new LoadpointEnergyService(this.api, this.accessory);
+    if (!this.energyEnabled) this.energy.remove();
 
     this.applyState(this.state);
   }
@@ -133,6 +143,8 @@ export class LoadpointAccessory {
     for (const [mode, svc] of this.modeSwitches) {
       svc.updateCharacteristic(C.On, this.state.mode === mode);
     }
+
+    if (this.energyEnabled) this.energy.apply(this.state, this.title());
   }
 
   /** Apply a single dotted-key WS update that targets this loadpoint. */

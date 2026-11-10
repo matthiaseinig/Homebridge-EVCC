@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { LoadpointAccessory, type LoadpointAccessoryConfig } from "../../src/accessories/loadpointAccessory.js";
 import type { EvccClient } from "../../src/api/client.js";
 import type { LoadpointState } from "../../src/api/types.js";
+import { CHARS, SERVICES } from "../../src/energy/definitions.js";
 import {
   MockPlatformAccessory,
+  MockService,
   asPlatformAccessory,
   createMockApi,
   createMockLogger,
@@ -21,6 +23,7 @@ function makeClient(): EvccClient {
 function build(
   state: LoadpointState,
   cfg: Partial<LoadpointAccessoryConfig> = {},
+  existing?: MockPlatformAccessory,
 ): {
   acc: MockPlatformAccessory;
   lp: LoadpointAccessory;
@@ -30,7 +33,7 @@ function build(
   const api = createMockApi();
   const log = createMockLogger();
   const client = makeClient();
-  const acc = new MockPlatformAccessory("LP", "uuid:lp");
+  const acc = existing ?? new MockPlatformAccessory("LP", "uuid:lp");
   const lp = new LoadpointAccessory({
     api,
     log,
@@ -230,5 +233,37 @@ describe("LoadpointAccessory", () => {
   it("dispose() is callable", () => {
     const { lp } = build({});
     expect(() => lp.dispose()).not.toThrow();
+  });
+
+  it("exposes the read-only Loadpoint Energy service and follows partial updates", () => {
+    const { acc, lp } = build({
+      title: "Garage",
+      mode: "pv",
+      chargePower: 3700,
+      sessionEnergy: 5432,
+      connected: true,
+    });
+    const svc = acc.services.find((s) => s.UUID === SERVICES.LoadpointEnergy.uuid)!;
+    expect(svc.subtype).toBe("loadpoint-energy");
+    expect(svc.getCharacteristic("Name").value).toBe("Garage Energy");
+    expect(svc.getCharacteristic(CHARS.ChargePower.uuid).value).toBe(3700);
+    expect(svc.getCharacteristic(CHARS.SessionEnergy.uuid).value).toBe(5.432);
+    expect(svc.getCharacteristic(CHARS.ChargeMode.uuid).value).toBe("pv");
+    expect(svc.getCharacteristic(CHARS.VehicleConnected.uuid).value).toBe(true);
+    expect(svc.getCharacteristic(CHARS.ChargePower.uuid).onSetHandler).toBeUndefined();
+
+    lp.applyPartial("chargePower", 1100.06);
+    expect(svc.getCharacteristic(CHARS.ChargePower.uuid).value).toBe(1100.1);
+    lp.applyPartial("effectivePlanTime", "2030-01-02T06:30:00Z");
+    expect(svc.getCharacteristic(CHARS.PlanTime.uuid).value).toBe(Date.UTC(2030, 0, 2, 6, 30) / 1000);
+  });
+
+  it("with energy disabled adds no energy service and removes a cached one", () => {
+    const acc = new MockPlatformAccessory("LP", "uuid:lp");
+    acc.services.push(
+      new MockService(SERVICES.LoadpointEnergy.uuid, "Garage Energy", "loadpoint-energy"),
+    );
+    build({ title: "Garage" }, { energy: false }, acc);
+    expect(acc.services.some((s) => s.UUID === SERVICES.LoadpointEnergy.uuid)).toBe(false);
   });
 });

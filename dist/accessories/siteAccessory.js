@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SiteAccessory = void 0;
+const siteEnergy_js_1 = require("../energy/siteEnergy.js");
 const applyServiceName_js_1 = require("../util/applyServiceName.js");
 const powerToLux_js_1 = require("../util/powerToLux.js");
 const SUBTYPE_BATTERY = "home-battery";
@@ -26,6 +27,8 @@ const BATTERY_MODE_SUBTYPES = {
  *   - ContactSensor     "Grid Direction"      open = importing, closed = exporting (grid.power < 0)
  *   - LightSensor       "Home Consumption"    lux = homePower
  *   - Switch ×3         "Battery Normal/Hold/Charge"  (only if writable)
+ *   - Custom energy services (Energy Site, PV Array, Aux Meter, Charging
+ *     Statistics), read-only, unless disabled (see SiteEnergyServices)
  */
 class SiteAccessory {
     api;
@@ -40,6 +43,8 @@ class SiteAccessory {
     gridDirectionService;
     homeService;
     modeSwitches = new Map();
+    energy;
+    energyEnabled;
     constructor(deps) {
         this.api = deps.api;
         this.log = deps.log;
@@ -54,6 +59,10 @@ class SiteAccessory {
         this.configureHome();
         if (this.writable)
             this.configureBatteryModeSwitches();
+        this.energyEnabled = deps.energy ?? true;
+        this.energy = new siteEnergy_js_1.SiteEnergyServices(this.api, this.accessory, deps.now);
+        if (!this.energyEnabled)
+            this.energy.removeAll();
         this.applyState(this.state);
     }
     applyState(state) {
@@ -93,6 +102,8 @@ class SiteAccessory {
         for (const [m, svc] of this.modeSwitches) {
             svc.updateCharacteristic(C.On, mode === m);
         }
+        if (this.energyEnabled)
+            this.energy.apply(state);
     }
     dispose() {
         // Nothing to detach.

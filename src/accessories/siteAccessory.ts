@@ -1,6 +1,7 @@
 import type { API, Logging, PlatformAccessory, Service, WithUUID } from "homebridge";
 import type { EvccClient } from "../api/client.js";
 import type { BatteryMode, EvccState } from "../api/types.js";
+import { SiteEnergyServices } from "../energy/siteEnergy.js";
 import { applyServiceName } from "../util/applyServiceName.js";
 import { clampPercent, powerToLux } from "../util/powerToLux.js";
 
@@ -12,6 +13,10 @@ export interface SiteAccessoryDeps {
   state: EvccState;
   /** Whether write-back to EVCC is allowed. Controls the battery-mode switches. */
   writable: boolean;
+  /** Expose the read-only custom energy services (docs/zuhause-contract.md). Default true. */
+  energy?: boolean;
+  /** Clock for the Last Update characteristic; injectable for tests. */
+  now?: () => number;
 }
 
 const SUBTYPE_BATTERY = "home-battery";
@@ -39,6 +44,8 @@ const BATTERY_MODE_SUBTYPES: Record<Exclude<BatteryMode, "unknown">, string> = {
  *   - ContactSensor     "Grid Direction"      open = importing, closed = exporting (grid.power < 0)
  *   - LightSensor       "Home Consumption"    lux = homePower
  *   - Switch ×3         "Battery Normal/Hold/Charge"  (only if writable)
+ *   - Custom energy services (Energy Site, PV Array, Aux Meter, Charging
+ *     Statistics), read-only, unless disabled (see SiteEnergyServices)
  */
 export class SiteAccessory {
   private readonly api: API;
@@ -54,6 +61,8 @@ export class SiteAccessory {
   private gridDirectionService?: Service;
   private homeService?: Service;
   private readonly modeSwitches = new Map<Exclude<BatteryMode, "unknown">, Service>();
+  private readonly energy: SiteEnergyServices;
+  private readonly energyEnabled: boolean;
 
   constructor(deps: SiteAccessoryDeps) {
     this.api = deps.api;
@@ -69,6 +78,10 @@ export class SiteAccessory {
     this.configureGrid();
     this.configureHome();
     if (this.writable) this.configureBatteryModeSwitches();
+
+    this.energyEnabled = deps.energy ?? true;
+    this.energy = new SiteEnergyServices(this.api, this.accessory, deps.now);
+    if (!this.energyEnabled) this.energy.removeAll();
 
     this.applyState(this.state);
   }
@@ -126,6 +139,8 @@ export class SiteAccessory {
     for (const [m, svc] of this.modeSwitches) {
       svc.updateCharacteristic(C.On, mode === m);
     }
+
+    if (this.energyEnabled) this.energy.apply(state);
   }
 
   dispose(): void {

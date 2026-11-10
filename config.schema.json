@@ -72,6 +72,12 @@
         "default": false,
         "description": "Suppress the site-wide accessory (PV / grid / home battery / consumption). Loadpoints and vehicle sensors still appear."
       },
+      "hideEnergyCharacteristics": {
+        "title": "Hide energy characteristics for apps",
+        "type": "boolean",
+        "default": false,
+        "description": "Suppress the read-only custom energy services (PV per array, grid per phase, battery, home, aux, totals, loadpoint energy). The Apple Home app ignores them; they are for apps that read HomeKit directly. See docs/zuhause-contract.md."
+      },
       "hideVehiclePresence": {
         "title": "Hide per-vehicle presence sensors",
         "type": "boolean",

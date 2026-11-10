@@ -32,6 +32,8 @@ export interface EvccPlatformConfig extends PlatformConfig {
   hideSite?: boolean;
   /** Skip the per-vehicle occupancy sensors. Default false. */
   hideVehiclePresence?: boolean;
+  /** Skip the read-only custom energy services (docs/zuhause-contract.md). Default false. */
+  hideEnergyCharacteristics?: boolean;
   /** Verbose logging of WS frames and REST traffic. */
   debug?: boolean;
 }
@@ -214,6 +216,7 @@ export class EvccPlatform implements DynamicPlatformPlugin {
         accessory,
         state,
         writable: this.writable,
+        energy: !this.config.hideEnergyCharacteristics,
       });
     }
 
@@ -267,6 +270,7 @@ export class EvccPlatform implements DynamicPlatformPlugin {
             defaultMode: this.config.defaultLoadpointMode ?? "pv",
             exposeVehicleLimit: !!this.config.exposeVehicleLimit,
             writable: this.writable,
+            energy: !this.config.hideEnergyCharacteristics,
           },
         }),
       );

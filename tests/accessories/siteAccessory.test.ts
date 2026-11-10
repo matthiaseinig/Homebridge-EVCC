@@ -2,8 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { SiteAccessory } from "../../src/accessories/siteAccessory.js";
 import type { EvccClient } from "../../src/api/client.js";
 import type { EvccState } from "../../src/api/types.js";
+import { CHARS, SERVICES } from "../../src/energy/definitions.js";
+import { energyFixture } from "../energy/fixtures.js";
 import {
   MockPlatformAccessory,
+  MockService,
   asPlatformAccessory,
   createMockApi,
   createMockLogger,
@@ -15,11 +18,15 @@ function makeClient(): EvccClient {
   } as unknown as EvccClient;
 }
 
-function build(state: EvccState, writable = false) {
+function build(
+  state: EvccState,
+  writable = false,
+  extra: { energy?: boolean; acc?: MockPlatformAccessory } = {},
+) {
   const api = createMockApi();
   const log = createMockLogger();
   const client = makeClient();
-  const acc = new MockPlatformAccessory("Site", "uuid:site");
+  const acc = extra.acc ?? new MockPlatformAccessory("Site", "uuid:site");
   const site = new SiteAccessory({
     api,
     log,
@@ -27,6 +34,8 @@ function build(state: EvccState, writable = false) {
     accessory: asPlatformAccessory(acc),
     state,
     writable,
+    energy: extra.energy,
+    now: () => 1_900_000_000_000,
   });
   return { acc, site, client, log };
 }
@@ -107,5 +116,37 @@ describe("SiteAccessory", () => {
   it("dispose() is callable", () => {
     const { site } = build({} as EvccState);
     expect(() => site.dispose()).not.toThrow();
+  });
+
+  it("adds the read-only energy services by default and keeps them current", () => {
+    const { acc, site } = build(energyFixture());
+    const energy = acc.services.find((s) => s.UUID === SERVICES.EnergySite.uuid)!;
+    expect(energy.subtype).toBe("energy-site");
+    expect(energy.getCharacteristic(CHARS.GridPower.uuid).value).toBe(-1250.1);
+    expect(energy.getCharacteristic(CHARS.LastUpdate.uuid).value).toBe(1_900_000_000);
+    expect(acc.services.filter((s) => s.UUID === SERVICES.PvArray.uuid)).toHaveLength(2);
+    expect(acc.services.filter((s) => s.UUID === SERVICES.ChargingStatistics.uuid)).toHaveLength(2);
+
+    site.applyState({ ...energyFixture(), grid: { power: 321 } } as EvccState);
+    expect(energy.getCharacteristic(CHARS.GridPower.uuid).value).toBe(321);
+    expect(energy.getCharacteristic(CHARS.GridPowerL1.uuid).value).toBe(0);
+  });
+
+  it("keeps the existing Home-app services unchanged next to the energy services", () => {
+    const { acc } = build(energyFixture());
+    const pv = acc.services.find((s) => s.subtype === "pv-power")!;
+    expect(pv.getCharacteristic("CurrentAmbientLightLevel").value).toBe(3050);
+    const battery = acc.services.find((s) => s.subtype === "home-battery")!;
+    expect(battery.getCharacteristic("BatteryLevel").value).toBe(56);
+  });
+
+  it("with energy disabled adds no energy services and removes cached ones", () => {
+    const acc = new MockPlatformAccessory("Site", "uuid:site");
+    acc.services.push(new MockService(SERVICES.EnergySite.uuid, "Energy Site", "energy-site"));
+    acc.services.push(new MockService(SERVICES.PvArray.uuid, "Array A", "pv:pv1"));
+    build(energyFixture(), false, { energy: false, acc });
+    const custom = Object.values(SERVICES).map((s) => s.uuid as string);
+    expect(acc.services.some((s) => custom.includes(s.UUID))).toBe(false);
+    expect(acc.services.some((s) => s.subtype === "pv-power")).toBe(true);
   });
 });

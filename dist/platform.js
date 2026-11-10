@@ -160,6 +160,7 @@ class EvccPlatform {
                 accessory,
                 state,
                 writable: this.writable,
+                energy: !this.config.hideEnergyCharacteristics,
             });
         }
         if (isNew) {
@@ -208,6 +209,7 @@ class EvccPlatform {
                     defaultMode: this.config.defaultLoadpointMode ?? "pv",
                     exposeVehicleLimit: !!this.config.exposeVehicleLimit,
                     writable: this.writable,
+                    energy: !this.config.hideEnergyCharacteristics,
                 },
             }));
         }

@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LoadpointAccessory = void 0;
+const loadpointEnergy_js_1 = require("../energy/loadpointEnergy.js");
 const applyServiceName_js_1 = require("../util/applyServiceName.js");
 const powerToLux_js_1 = require("../util/powerToLux.js");
 const SUBTYPE_OUTLET = "outlet";
@@ -28,6 +29,7 @@ const SWITCH_MODES = ["now", "pv", "minpv"];
  *   - BatteryService    "<title> Vehicle"           BatteryLevel = vehicleSoc, ChargingState = charging
  *   - LightSensor       "<title> Power"             CurrentAmbientLightLevel = chargePower (W → lux)
  *   - Switch ×3         "<title> Now"/"PV"/"Min+PV" optional, when modeUi = "switches"
+ *   - Custom service    "<title> Energy"            read-only Loadpoint Energy characteristics
  */
 class LoadpointAccessory {
     api;
@@ -42,6 +44,8 @@ class LoadpointAccessory {
     batteryService;
     powerService;
     modeSwitches = new Map();
+    energy;
+    energyEnabled;
     constructor(deps) {
         this.api = deps.api;
         this.log = deps.log;
@@ -59,6 +63,10 @@ class LoadpointAccessory {
         this.configurePower();
         if (this.config.modeUi === "switches")
             this.configureModeSwitches();
+        this.energyEnabled = this.config.energy ?? true;
+        this.energy = new loadpointEnergy_js_1.LoadpointEnergyService(this.api, this.accessory);
+        if (!this.energyEnabled)
+            this.energy.remove();
         this.applyState(this.state);
     }
     /** Re-render every service from a fresh loadpoint state. */
@@ -89,6 +97,8 @@ class LoadpointAccessory {
         for (const [mode, svc] of this.modeSwitches) {
             svc.updateCharacteristic(C.On, this.state.mode === mode);
         }
+        if (this.energyEnabled)
+            this.energy.apply(this.state, this.title());
     }
     /** Apply a single dotted-key WS update that targets this loadpoint. */
     applyPartial(key, value) {
