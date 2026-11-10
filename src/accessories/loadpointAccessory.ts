@@ -25,7 +25,7 @@ export interface LoadpointAccessoryConfig {
   exposeVehicleLimit: boolean;
   /** Whether write-back to EVCC is allowed (i.e. password configured & login succeeded). */
   writable: boolean;
-  /** Expose the read-only custom Loadpoint Energy service (docs/zuhause-contract.md). Default true. */
+  /** Expose the read-only custom Loadpoint Energy service (docs/app-contract.md). Default true. */
   energy?: boolean;
   /** Expose the Charging History service (needs `energy`). The platform sets it unless `sessions.enabled` is false, so the default is true. */
   sessions?: boolean;
@@ -82,7 +82,7 @@ const MODE_ROLES: Record<string, string> = {
  * Unless energy characteristics are disabled, every control service above
  * also carries the read-only custom Control Role and Control Enabled
  * characteristics so apps can find and steer the controls without relying on
- * service names (docs/zuhause-contract.md).
+ * service names (docs/app-contract.md).
  */
 export class LoadpointAccessory {
   private readonly api: API;

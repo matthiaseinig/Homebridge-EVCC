@@ -35,7 +35,7 @@ export interface EvccPlatformConfig extends PlatformConfig {
   hideSite?: boolean;
   /** Skip the per-vehicle occupancy sensors. Default false. */
   hideVehiclePresence?: boolean;
-  /** Skip the custom energy and charging services and control tags (docs/zuhause-contract.md). Default false. */
+  /** Skip the custom energy and charging services and control tags (docs/app-contract.md). Default false. */
   hideEnergyCharacteristics?: boolean;
   /**
    * Charging session history: `{ enabled, maxSessions, api: { enabled, bindAddress, port, token } }`.

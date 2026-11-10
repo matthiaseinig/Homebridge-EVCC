@@ -27,7 +27,7 @@ Custom services on the site accessory (read-only, for apps; the Home app ignores
 | `Aux Meter` (one per `aux[]`) | `aux:<meter name>` | meter ID, power |
 | `Charging Statistics` (one per `statistics` key) | `stat:<period>` | period, charged energy, solar percentage, average price, average CO2 |
 
-A repeated service is removed only after its meter or period has been missing from 3 consecutive REST snapshots. The characteristic list with UUIDs, units, ranges, signs and EVCC source fields is in [zuhause-contract.md](zuhause-contract.md).
+A repeated service is removed only after its meter or period has been missing from 3 consecutive REST snapshots. The characteristic list with UUIDs, units, ranges, signs and EVCC source fields is in [app-contract.md](app-contract.md).
 
 ## Loadpoint accessory (one per EVCC loadpoint)
 
@@ -43,7 +43,7 @@ Display name: `loadpoints[i].title`, falls back to `"Loadpoint <i+1>"`.
 | `LightSensor` | `charge-power` | `CurrentAmbientLightLevel ← chargePower` |
 | `Switch` | `mode-now` / `mode-pv` / `mode-minpv` | (only when `loadpointMode: "switches"`)<br>`On ← mode === <mode>`<br>`onSet`: ON → set to `<mode>`, OFF (when active) → set to `off` |
 
-Custom energy service (read-only, unless `hideEnergyCharacteristics: true`): `Loadpoint Energy`, subtype `loadpoint-energy`, with charge power, mode, connected, charging, limit SoC, vehicle SoC, range, name and title, session and today energy, charge meter total, the plan time, plan SoC and plan active flag, last update, and the writable `Charge Mode` and `Set Plan` (with the admin password). This service and the outlet, charge-limit, vehicle-limit and mode-switch services carry the read-only `Control Role` and `Control Enabled` characteristics. Details, including the write effects and how EVCC confirms them, in [zuhause-contract.md](zuhause-contract.md).
+Custom energy service (read-only, unless `hideEnergyCharacteristics: true`): `Loadpoint Energy`, subtype `loadpoint-energy`, with charge power, mode, connected, charging, limit SoC, vehicle SoC, range, name and title, session and today energy, charge meter total, the plan time, plan SoC and plan active flag, last update, and the writable `Charge Mode` and `Set Plan` (with the admin password). This service and the outlet, charge-limit, vehicle-limit and mode-switch services carry the read-only `Control Role` and `Control Enabled` characteristics. Details, including the write effects and how EVCC confirms them, in [app-contract.md](app-contract.md).
 
 Loadpoints disappearing from EVCC (e.g. user removed one from the EVCC config) are unregistered automatically on the next state poll.
 

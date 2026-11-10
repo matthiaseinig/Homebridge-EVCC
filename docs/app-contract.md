@@ -1,6 +1,6 @@
-# Zuhause energy and charging contract
+# App energy and charging contract
 
-This document is the contract between this plugin and apps that read EVCC data and steer EVCC charging through HomeKit, in particular the Zuhause iOS app. HomeKit is the conduit: the app talks to the paired Homebridge bridge through Apple's HomeKit framework and never calls EVCC directly.
+This document is the contract between this plugin and apps that read EVCC data and steer EVCC charging through HomeKit, in particular the companion iOS app. HomeKit is the conduit: the app talks to the paired Homebridge bridge through Apple's HomeKit framework and never calls EVCC directly.
 
 The plugin exposes two groups of custom data:
 
@@ -11,9 +11,9 @@ Standard HomeKit characteristics are used only where their meaning truly matches
 
 The source of truth is [`src/energy/definitions.ts`](../src/energy/definitions.ts). A unit test renders every table in this document from that file and fails on any missing, different or stale row.
 
-## Data ownership in Zuhause
+## Data ownership in the app
 
-Zuhause reads site energy from the Fronius plugin first and uses this plugin's site energy services only as a fallback when the Fronius plugin is absent. At runtime every value has exactly one owner, chosen by the app; the app never mixes or adds values from both sources. Charging data and charging control always come from this plugin.
+The app reads site energy from the Fronius plugin first and uses this plugin's site energy services only as a fallback when the Fronius plugin is absent. At runtime every value has exactly one owner, chosen by the app; the app never mixes or adds values from both sources. Charging data and charging control always come from this plugin.
 
 ## Rules for every custom characteristic
 
@@ -53,7 +53,7 @@ iOS does not expose HAP service subtypes, so services of the same type are told 
 
 ## Site energy
 
-Read-only. For Zuhause this is the fallback source (see [Data ownership](#data-ownership-in-zuhause)).
+Read-only. For the app this is the fallback source (see [Data ownership](#data-ownership-in-the-app)).
 
 - **Signs follow EVCC.** Grid power: positive is import from the grid, negative is export (feed-in). Battery power: positive is discharging (the battery supplies the home), negative is charging.
 - **Not reported versus zero.** Use `Battery Configured`, `Grid Configured` and the presence of the per-meter services to tell "not configured" from a real zero.

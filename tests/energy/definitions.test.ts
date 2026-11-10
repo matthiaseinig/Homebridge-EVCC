@@ -14,7 +14,7 @@ import { CONTROL_TAG_KEYS, allBlocks } from "./contractTable.js";
 
 const UUID_RE = /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/;
 const FULL_UUID_IN_LINE = /E5C[01][0-9A-F]{4}-8B93-4652-90CD-F02EAF5356EA/;
-const contractPath = join(__dirname, "../../docs/zuhause-contract.md");
+const contractPath = join(__dirname, "../../docs/app-contract.md");
 
 /** Lines of `text` that contain one of this plugin's full UUIDs. */
 function uuidLines(text: string): string[] {
@@ -81,7 +81,7 @@ describe("energy definitions", () => {
     for (const role of Object.values(CONTROL_ROLES)) expect(doc).toContain(`\`${role}\``);
   });
 
-  it("matches docs/zuhause-contract.md row by row (no missing, different or stale rows)", () => {
+  it("matches docs/app-contract.md row by row (no missing, different or stale rows)", () => {
     expect(contractProblems(readFileSync(contractPath, "utf-8"))).toEqual([]);
   });
 

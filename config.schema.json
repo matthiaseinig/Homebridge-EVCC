@@ -76,7 +76,7 @@
         "title": "Hide energy and charging characteristics for apps",
         "type": "boolean",
         "default": false,
-        "description": "Suppress the custom energy and charging services (site energy, PV arrays, aux meters, loadpoint energy, charging statistics) and the control tags. The Apple Home app ignores them; they are for apps that read HomeKit directly. See docs/zuhause-contract.md."
+        "description": "Suppress the custom energy and charging services (site energy, PV arrays, aux meters, loadpoint energy, charging statistics) and the control tags. The Apple Home app ignores them; they are for apps that read HomeKit directly. See docs/app-contract.md."
       },
       "hideVehiclePresence": {
         "title": "Hide per-vehicle presence sensors",

@@ -43,7 +43,7 @@ const MODE_ROLES = {
  * Unless energy characteristics are disabled, every control service above
  * also carries the read-only custom Control Role and Control Enabled
  * characteristics so apps can find and steer the controls without relying on
- * service names (docs/zuhause-contract.md).
+ * service names (docs/app-contract.md).
  */
 class LoadpointAccessory {
     api;

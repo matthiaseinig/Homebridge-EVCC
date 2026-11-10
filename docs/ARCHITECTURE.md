@@ -59,7 +59,7 @@ EVCC's read endpoints (state, log areas, etc.) are open. Write endpoints require
 | [`src/accessories/loadpointAccessory.ts`](../src/accessories/loadpointAccessory.ts) | Per-loadpoint accessory: outlet, charge-limit blinds, optional vehicle-limit blinds, vehicle battery, charge-power LightSensor, optional mode switches. |
 | [`src/accessories/siteAccessory.ts`](../src/accessories/siteAccessory.ts) | Site-level accessory: home battery, PV, grid power + direction, home consumption, optional battery-mode switches. |
 | [`src/accessories/vehiclePresenceAccessory.ts`](../src/accessories/vehiclePresenceAccessory.ts) | Per-vehicle OccupancySensor — fires while the vehicle is connected at any loadpoint. |
-| [`src/energy/definitions.ts`](../src/energy/definitions.ts) | UUIDs, metadata and retired UUIDs of the custom characteristics and services (contract: [zuhause-contract.md](zuhause-contract.md)). |
+| [`src/energy/definitions.ts`](../src/energy/definitions.ts) | UUIDs, metadata and retired UUIDs of the custom characteristics and services (contract: [app-contract.md](app-contract.md)). |
 | [`src/energy/extract.ts`](../src/energy/extract.ts) | Pure mapping from the EVCC state tree to characteristic values (unit conversions, fallbacks). |
 | [`src/energy/sanitize.ts`](../src/energy/sanitize.ts) | Rounding, clamping and defaults so HAP never sees an out-of-range value. |
 | [`src/energy/hapTypes.ts`](../src/energy/hapTypes.ts) | Builds the custom HAP classes at runtime and syncs services on (cached) accessories. |
@@ -78,7 +78,7 @@ HomeKit doesn't ship a generic numeric-display service. `LightSensor`'s `Current
 
 ## Why custom characteristics for app data?
 
-The `LightSensor` mapping above is a display trick for the Home app: it loses the sign, the unit and anything above 100 000. Apps that read HomeKit directly need the real values, so the plugin also exposes custom energy and charging characteristics with stable UUIDs, documented units and EVCC's sign conventions, and tags its controls with their role ([zuhause-contract.md](zuhause-contract.md)). Standard characteristics are used only where the meaning matches exactly. The Home app ignores custom services, so Home-app users see no change.
+The `LightSensor` mapping above is a display trick for the Home app: it loses the sign, the unit and anything above 100 000. Apps that read HomeKit directly need the real values, so the plugin also exposes custom energy and charging characteristics with stable UUIDs, documented units and EVCC's sign conventions, and tags its controls with their role ([app-contract.md](app-contract.md)). Standard characteristics are used only where the meaning matches exactly. The Home app ignores custom services, so Home-app users see no change.
 
 ## Coverage targets
 

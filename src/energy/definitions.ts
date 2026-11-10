@@ -9,7 +9,7 @@
  * The UUIDs were generated once and are a public contract: never change or
  * reuse one. Add new entries with new UUIDs instead. The full contract,
  * including units, ranges, signs, the EVCC source field of every
- * characteristic and the charging controls, is in docs/zuhause-contract.md;
+ * characteristic and the charging controls, is in docs/app-contract.md;
  * a test renders its tables from this file.
  *
  * UUID scheme: a random suffix shared by all types of this plugin, with an
