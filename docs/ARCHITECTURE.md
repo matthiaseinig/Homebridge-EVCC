@@ -56,7 +56,7 @@ EVCC's read endpoints (state, log areas, etc.) are open. Write endpoints require
 | [`src/api/client.ts`](../src/api/client.ts) | REST + WebSocket transport, auth, polling, reconnect backoff. |
 | [`src/api/types.ts`](../src/api/types.ts) | TypeScript types for State, Loadpoint, Vehicle, BatteryMode, etc. Loose by design — EVCC's state surface is documented as "may change between releases". |
 | [`src/api/decoders.ts`](../src/api/decoders.ts) | `parseFrame` (JSON guard), `applyUpdate` (dotted-path merge), `splitPath`, `asLoadpointArray`. |
-| [`src/accessories/loadpointAccessory.ts`](../src/accessories/loadpointAccessory.ts) | Per-loadpoint accessory: outlet, charge-limit blinds, optional vehicle-limit blinds, vehicle battery, charge-power LightSensor, optional mode switches. |
+| [`src/accessories/loadpointAccessory.ts`](../src/accessories/loadpointAccessory.ts) | Per-loadpoint accessory: outlet, `Charge Limit` writes, legacy charge-limit and vehicle-limit blinds (off by default), vehicle battery, charge-power LightSensor, optional mode switches. |
 | [`src/accessories/siteAccessory.ts`](../src/accessories/siteAccessory.ts) | Site-level accessory: home battery, PV, grid power + direction, home consumption, optional battery-mode switches. |
 | [`src/accessories/vehiclePresenceAccessory.ts`](../src/accessories/vehiclePresenceAccessory.ts) | Per-vehicle OccupancySensor — fires while the vehicle is connected at any loadpoint. |
 | [`src/energy/definitions.ts`](../src/energy/definitions.ts) | UUIDs, metadata and retired UUIDs of the custom characteristics and services (contract: [app-contract.md](app-contract.md)). |
@@ -68,7 +68,11 @@ EVCC's read endpoints (state, log areas, etc.) are open. Write endpoints require
 | [`src/util/redact.ts`](../src/util/redact.ts) | Password redaction for log output. |
 | [`src/util/powerToLux.ts`](../src/util/powerToLux.ts) | Maps watts onto HomeKit's `CurrentAmbientLightLevel` characteristic, plus `clampPercent` for SOC values. |
 
-## Why `WindowCovering` for the charge limit?
+## Why the charge limit is no longer a `WindowCovering`
+
+From 1.2.0 the charge limit is the custom `Charge Limit` characteristic on `Loadpoint Energy`, and the `WindowCovering` below is a legacy option (`limitWindowCovering`, default `false`). Apple Home treats every `WindowCovering` as blinds: scenes, "close all blinds" and blinds automations write `TargetPosition` on all of them, so with HomeKit writes on they changed the car's charge limit. No standard HomeKit service with a slider can be kept out of Home app scenes; a custom characteristic is invisible to the Home app and is written only by apps, on a user action.
+
+The original rationale, kept for the legacy option:
 
 HomeKit only exposes a few native services that include a settable 0–100 % slider: `WindowCovering` (TargetPosition / CurrentPosition), `Lightbulb` (Brightness), `Fan` (RotationSpeed), and `Thermostat` (target temp, but constrained to °C/°F). `WindowCovering` is the cleanest visual match — the Home app draws a vertical slider with both target and current position, which maps perfectly onto "drag to set limitSoc; the bar fills as the car charges towards it".
 

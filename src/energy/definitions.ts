@@ -4,7 +4,7 @@
  * Two groups:
  *   - site energy (Energy Site, PV Array, Aux Meter): read-only
  *   - charging (Loadpoint Energy, Charging Statistics, control tags): read-only
- *     except Charge Mode and Set Plan, which forward writes to EVCC
+ *     except Charge Mode, Set Plan and Charge Limit, which forward writes to EVCC
  *
  * The UUIDs were generated once and are a public contract: never change or
  * reuse one. Add new entries with new UUIDs instead. The full contract,
@@ -36,6 +36,8 @@ export interface CharDef {
   readonly decimals?: number;
   /** Maximum string length (string format only). */
   readonly maxLen?: number;
+  /** HAP minStep (numeric formats only); tells clients which values a write accepts. */
+  readonly step?: number;
   /** Paired write in addition to read and notify; the write is forwarded to EVCC. */
   readonly writable?: boolean;
   /** Contract: EVCC source field and conversion (documentation, checked against the contract). */
@@ -389,6 +391,19 @@ export const CHARS = {
     source: "read: `<Plan SoC>,<Plan Time>` or empty; write: see Charging controls",
     sign: "empty = no plan",
   },
+  ChargeLimit: {
+    uuid: charUuid("0051"),
+    name: "Charge Limit",
+    format: "float",
+    unit: "%",
+    min: 0,
+    max: 100,
+    decimals: 0,
+    step: 1,
+    writable: true,
+    source: "read: `loadpoints[i].limitSoc`; write: integer 0 .. 100, see Charging controls",
+    sign: "0 means no session limit",
+  },
 
   // Charging: statistics (one service per EVCC statistics period).
   StatPeriod: {
@@ -566,6 +581,7 @@ export const SERVICES = {
       "PlanActive",
       "LoadpointLastUpdate",
       "SetPlan",
+      "ChargeLimit",
     ],
   },
   ChargingStatistics: {

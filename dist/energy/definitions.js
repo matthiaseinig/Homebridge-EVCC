@@ -5,7 +5,7 @@
  * Two groups:
  *   - site energy (Energy Site, PV Array, Aux Meter): read-only
  *   - charging (Loadpoint Energy, Charging Statistics, control tags): read-only
- *     except Charge Mode and Set Plan, which forward writes to EVCC
+ *     except Charge Mode, Set Plan and Charge Limit, which forward writes to EVCC
  *
  * The UUIDs were generated once and are a public contract: never change or
  * reuse one. Add new entries with new UUIDs instead. The full contract,
@@ -360,6 +360,19 @@ exports.CHARS = {
         source: "read: `<Plan SoC>,<Plan Time>` or empty; write: see Charging controls",
         sign: "empty = no plan",
     },
+    ChargeLimit: {
+        uuid: charUuid("0051"),
+        name: "Charge Limit",
+        format: "float",
+        unit: "%",
+        min: 0,
+        max: 100,
+        decimals: 0,
+        step: 1,
+        writable: true,
+        source: "read: `loadpoints[i].limitSoc`; write: integer 0 .. 100, see Charging controls",
+        sign: "0 means no session limit",
+    },
     // Charging: statistics (one service per EVCC statistics period).
     StatPeriod: {
         uuid: charUuid("0060"),
@@ -522,6 +535,7 @@ exports.SERVICES = {
             "PlanActive",
             "LoadpointLastUpdate",
             "SetPlan",
+            "ChargeLimit",
         ],
     },
     ChargingStatistics: {

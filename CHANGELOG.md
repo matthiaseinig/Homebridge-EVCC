@@ -8,6 +8,30 @@ Version bumps and entries below are managed by
 [release-please](https://github.com/googleapis/release-please) on every push to
 `main`.
 
+## [1.2.0] - 2026-11-10
+
+### Fixed
+- An Apple Home scene or a Siri request such as "close all blinds" could change
+  the car's charge limit, because the limit was a `WindowCovering` and HomeKit
+  writes are on. The limit window coverings (`limit-loadpoint`, and
+  `limit-vehicle` with `exposeVehicleLimit`) are now off by default and are
+  removed from accessories restored from the Homebridge cache.
+
+### Added
+- `Charge Limit` characteristic (`E5C00051-...`) on the `Loadpoint Energy`
+  service: reads `limitSoc`, accepts an integer 0 to 100 (0 clears the session
+  limit) and forwards it to `POST /api/loadpoints/{id}/limitsoc/{value}`. The
+  Apple Home app ignores it, so no Home app scene can reach it.
+- `limitWindowCovering` option (default `false`) that brings the old blinds
+  slider back for users who accept the scene risk. `exposeVehicleLimit` now
+  needs it and logs a warning without it.
+
+### Migration
+- Not a re-pair. The charge-limit tile disappears from the Home app; scenes
+  and automations that contained it lose that one action. Check "close all
+  blinds" style scenes once after the update. Apps switch to `Charge Limit`
+  (docs/app-contract.md).
+
 ## [1.1.0] - 2026-11-10
 
 ### Added

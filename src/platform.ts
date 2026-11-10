@@ -29,8 +29,14 @@ export interface EvccPlatformConfig extends PlatformConfig {
   loadpointMode?: LoadpointModeUi;
   /** ChargeMode used when toggling the on/off Outlet to ON. Default "pv". */
   defaultLoadpointMode?: ChargeMode;
-  /** Also expose the assigned vehicle's limitSoc as a second blinds. Default false. */
+  /** Vehicle limitSoc as a second blinds; needs `limitWindowCovering`. Default false. */
   exposeVehicleLimit?: boolean;
+  /**
+   * Legacy: expose the charge limits as WindowCovering sliders in the Home app.
+   * Default false: Apple Home scenes and "close all blinds" would change the
+   * charge limit (issue #33). Apps use the custom `Charge Limit` characteristic.
+   */
+  limitWindowCovering?: boolean;
   /** Skip the site-wide telemetry accessory. Default false. */
   hideSite?: boolean;
   /** Skip the per-vehicle occupancy sensors. Default false. */
@@ -319,6 +325,7 @@ export class EvccPlatform implements DynamicPlatformPlugin {
             modeUi: this.config.loadpointMode ?? "outlet",
             defaultMode: this.config.defaultLoadpointMode ?? "pv",
             exposeVehicleLimit: !!this.config.exposeVehicleLimit,
+            limitWindowCovering: this.config.limitWindowCovering === true,
             writable: this.writable,
             energy: !this.config.hideEnergyCharacteristics,
             sessions: this.sessions !== null,

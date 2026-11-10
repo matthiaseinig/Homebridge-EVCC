@@ -37,13 +37,13 @@ Display name: `loadpoints[i].title`, falls back to `"Loadpoint <i+1>"`.
 |---|---|---|
 | `AccessoryInformation` | – | `SerialNumber = lp-<index>` |
 | `Outlet` | `outlet` | `On ← enabled`<br>`OutletInUse ← connected`<br>`onSet`: `true → POST /api/loadpoints/<id>/mode/<defaultLoadpointMode>`; `false → mode/off` |
-| `WindowCovering` | `limit-loadpoint` | `TargetPosition ↔ limitSoc` (write & read)<br>`CurrentPosition ← vehicleSoc`<br>`PositionState = STOPPED` |
-| `WindowCovering` | `limit-vehicle` | (only when `exposeVehicleLimit: true`)<br>`TargetPosition ↔ vehicles[vehicleName].limitSoc` |
+| `WindowCovering` | `limit-loadpoint` | (legacy, only when `limitWindowCovering: true`, default `false`)<br>`TargetPosition ↔ limitSoc` (write & read)<br>`CurrentPosition ← vehicleSoc`<br>`PositionState = STOPPED` |
+| `WindowCovering` | `limit-vehicle` | (legacy, only when `limitWindowCovering: true` and `exposeVehicleLimit: true`)<br>`TargetPosition ↔ vehicles[vehicleName].limitSoc` |
 | `Battery` | `vehicle-battery` | `BatteryLevel ← vehicleSoc`<br>`ChargingState ← charging`<br>`StatusLowBattery ← vehicleSoc < 20` |
 | `LightSensor` | `charge-power` | `CurrentAmbientLightLevel ← chargePower` |
 | `Switch` | `mode-now` / `mode-pv` / `mode-minpv` | (only when `loadpointMode: "switches"`)<br>`On ← mode === <mode>`<br>`onSet`: ON → set to `<mode>`, OFF (when active) → set to `off` |
 
-Custom energy service (read-only, unless `hideEnergyCharacteristics: true`): `Loadpoint Energy`, subtype `loadpoint-energy`, with charge power, mode, connected, charging, limit SoC, vehicle SoC, range, name and title, session and today energy, charge meter total, the plan time, plan SoC and plan active flag, last update, and the writable `Charge Mode` and `Set Plan` (with the admin password). This service and the outlet, charge-limit, vehicle-limit and mode-switch services carry the read-only `Control Role` and `Control Enabled` characteristics. Details, including the write effects and how EVCC confirms them, in [app-contract.md](app-contract.md).
+Custom energy service (unless `hideEnergyCharacteristics: true`): `Loadpoint Energy`, subtype `loadpoint-energy`, with charge power, mode, connected, charging, limit SoC, vehicle SoC, range, name and title, session and today energy, charge meter total, the plan time, plan SoC and plan active flag, last update, and the writable `Charge Mode`, `Set Plan` and `Charge Limit` (with the admin password). `Charge Limit` is how the charge limit is set: the Home app ignores custom characteristics, so scenes such as "close all blinds" cannot reach it. This service and the outlet, charge-limit, vehicle-limit and mode-switch services carry the read-only `Control Role` and `Control Enabled` characteristics. Details, including the write effects and how EVCC confirms them, in [app-contract.md](app-contract.md).
 
 Loadpoints disappearing from EVCC (e.g. user removed one from the EVCC config) are unregistered automatically on the next state poll.
 

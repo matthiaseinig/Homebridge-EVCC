@@ -248,6 +248,7 @@ class EvccPlatform {
                     modeUi: this.config.loadpointMode ?? "outlet",
                     defaultMode: this.config.defaultLoadpointMode ?? "pv",
                     exposeVehicleLimit: !!this.config.exposeVehicleLimit,
+                    limitWindowCovering: this.config.limitWindowCovering === true,
                     writable: this.writable,
                     energy: !this.config.hideEnergyCharacteristics,
                     sessions: this.sessions !== null,

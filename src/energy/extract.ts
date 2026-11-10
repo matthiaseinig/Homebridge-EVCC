@@ -151,5 +151,6 @@ export function loadpointValues(lp: LoadpointState, nowSeconds: number): CharVal
     PlanActive: bool(lp.planActive),
     LoadpointLastUpdate: nowSeconds,
     SetPlan: formatPlan(planTime, planSoc),
+    ChargeLimit: num(lp.limitSoc),
   };
 }

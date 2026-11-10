@@ -60,11 +60,20 @@
           "functionBody": "return model.loadpointMode === 'outlet' || !model.loadpointMode;"
         }
       },
-      "exposeVehicleLimit": {
-        "title": "Also expose the assigned vehicle's charge limit",
+      "limitWindowCovering": {
+        "title": "Legacy: show the charge limit as blinds in the Home app",
         "type": "boolean",
         "default": false,
-        "description": "Adds a second WindowCovering per loadpoint that drives the *vehicle's* limitSoc (follows the car wherever it plugs in). Off by default — the loadpoint limit is usually what you want."
+        "description": "Adds the old WindowCovering slider for the charge limit. Leave this off: Apple Home scenes and Siri requests such as 'close all blinds' write every window covering and would change your car's charge limit. Apps set the limit through the custom Charge Limit characteristic."
+      },
+      "exposeVehicleLimit": {
+        "title": "Legacy: also expose the assigned vehicle's charge limit",
+        "type": "boolean",
+        "default": false,
+        "description": "Only with the legacy blinds option above: adds a second WindowCovering per loadpoint that drives the *vehicle's* limitSoc (follows the car wherever it plugs in). Off by default; the loadpoint limit is usually what you want.",
+        "condition": {
+          "functionBody": "return model.limitWindowCovering === true;"
+        }
       },
       "hideSite": {
         "title": "Hide site telemetry accessory",

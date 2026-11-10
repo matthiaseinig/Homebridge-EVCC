@@ -13,17 +13,17 @@
 
 Homebridge plugin for [EVCC](https://evcc.io) — the open-source solar charging controller for electric vehicles.
 
-It exposes everything EVCC knows about your home as native HomeKit accessories: a charge-limit slider you can drag in the Home app, your car's battery level, your home battery state, your PV production, your grid import/export, and a per-vehicle "is plugged in" sensor that powers automations like "garage light when my car arrives".
+It exposes everything EVCC knows about your home as native HomeKit accessories: your car's battery level, your home battery state, your PV production, your grid import/export, and a per-vehicle "is plugged in" sensor that powers automations like "garage light when my car arrives".
 
 ## Features
 
-- **Charge-limit slider** per loadpoint, modeled as a `WindowCovering` so you get a clean 0–100 % slider in the Home app — drag to set the loadpoint's `limitSoc` directly. Optionally a second slider that drives the assigned vehicle's `limitSoc` instead.
+- **Charge limit for apps.** The loadpoint's `limitSoc` is the writable custom `Charge Limit` characteristic (integer 0 to 100 %) on the `Loadpoint Energy` service. The Apple Home app does not show it, so no Home app scene, Siri request such as "close all blinds" or Home app automation can change the car's charge limit. Up to 1.1.0 the limit was a `WindowCovering` slider; that slider is now a legacy option (`limitWindowCovering`, off by default), see [Charge limit and Apple Home scenes](#charge-limit-and-apple-home-scenes).
 - **Vehicle SOC + range** as a `BatteryService` per loadpoint, with `ChargingState` and low-battery flag.
 - **Loadpoint outlet** — `On` reflects whether the loadpoint is enabled, `OutletInUse` reflects whether a vehicle is connected. Toggling it sets the configured charge mode (default `pv`).
 - **Per-vehicle presence sensor** — a HomeKit `OccupancySensor` per known vehicle, fires while the vehicle is connected at any loadpoint.
 - **Site telemetry accessory** — home-battery SOC, PV production, grid import/export, and home consumption, all as `LightSensor` services (lux ≈ watts; the customary HomeKit "any number" mapping).
 - **Optional mode switches** — flip the loadpoint UI to 3 mutually-exclusive switches (Now / PV / Min+PV) instead of the single on/off outlet.
-- **Energy and charging characteristics for apps** (on by default): custom HomeKit services with site energy (PV total and per array, grid power per phase, signed, home, aux and battery power, battery SoC, meter totals, tariffs) and charging (per loadpoint charge power, mode, session and today energy, vehicle SoC and range, planned departure, plus EVCC's charging statistics). `Charge Mode` and `Set Plan` accept writes, so apps can switch the mode and set or clear a departure plan; the existing controls carry read-only role tags. The Apple Home app ignores these custom services; apps that read HomeKit directly (such as the companion iOS app) get exact values, units and signs. Everything is documented in [docs/app-contract.md](docs/app-contract.md).
+- **Energy and charging characteristics for apps** (on by default): custom HomeKit services with site energy (PV total and per array, grid power per phase, signed, home, aux and battery power, battery SoC, meter totals, tariffs) and charging (per loadpoint charge power, mode, session and today energy, vehicle SoC and range, planned departure, plus EVCC's charging statistics). `Charge Mode`, `Set Plan` and `Charge Limit` accept writes, so apps can switch the mode, set or clear a departure plan and set the charge limit; the existing controls carry read-only role tags. The Apple Home app ignores these custom services; apps that read HomeKit directly (such as the companion iOS app) get exact values, units and signs. Everything is documented in [docs/app-contract.md](docs/app-contract.md).
 - **Charging history** (on by default): the plugin polls EVCC's own session log (`GET /api/sessions`) every 10 minutes, and once shortly after a loadpoint stops charging or is unplugged, and keeps a bounded copy in the Homebridge storage folder. A `Charging History` service on each loadpoint shows charged kWh today and this month, the solar share this month and the last session (kWh and end time). An optional read-only LAN API (off by default) serves the full session list and monthly or yearly totals. See [Charging history](#charging-history).
 - **Write errors are reported.** When EVCC rejects a write or cannot be reached, the plugin returns a HomeKit error, so the Home app shows "No Response" on the tile instead of pretending the change worked.
 - **Optional battery-mode switches** — Normal / Hold / Charge for your home battery, when an admin password is configured.
@@ -77,7 +77,8 @@ sudo npm install -g homebridge-evcc
 | `pollInterval` | integer | no | REST poll cadence in seconds. Default `30`. The websocket pushes diffs in real time; the poll is a safety net. |
 | `loadpointMode` | enum | no | `outlet` (default), `switches`, or `readonly` |
 | `defaultLoadpointMode` | enum | no | When `loadpointMode = outlet`: which mode the outlet activates when toggled ON. `now`, `pv` (default), or `minpv`. |
-| `exposeVehicleLimit` | boolean | no | Add a second WindowCovering per loadpoint that drives the assigned vehicle's `limitSoc`. Default `false`. |
+| `limitWindowCovering` | boolean | no | Legacy: also show the charge limit as a `WindowCovering` slider in the Home app. Default `false`. Leave it off: Apple Home scenes and "close all blinds" write every window covering and would change the charge limit. |
+| `exposeVehicleLimit` | boolean | no | With `limitWindowCovering: true`, add a second WindowCovering per loadpoint that drives the assigned vehicle's `limitSoc`. Default `false`. Ignored (with a warning) without `limitWindowCovering`. |
 | `hideSite` | boolean | no | Suppress the site-wide telemetry accessory. Default `false`. |
 | `hideVehiclePresence` | boolean | no | Suppress per-vehicle presence sensors. Default `false`. |
 | `hideEnergyCharacteristics` | boolean | no | Suppress the custom energy and charging services and the control tags (see [docs/app-contract.md](docs/app-contract.md)). Default `false`. |
@@ -95,12 +96,22 @@ Example `config.json` block:
       "url": "http://evcc.local:7070",
       "password": "your-admin-password",
       "loadpointMode": "outlet",
-      "defaultLoadpointMode": "pv",
-      "exposeVehicleLimit": true
+      "defaultLoadpointMode": "pv"
     }
   ]
 }
 ```
+
+## Charge limit and Apple Home scenes
+
+Up to version 1.1.0 the charge limit was a `WindowCovering` ("blinds") so the Home app could show a slider. With HomeKit writes on, this had a dangerous side effect: an Apple Home scene or a Siri request such as "close all blinds" also set the "blinds" of the wallbox to 0 % and so changed the car's charge limit.
+
+From 1.2.0 the charge limit is the custom `Charge Limit` characteristic, which only apps that read HomeKit directly can see and write. When you update:
+
+- The `<loadpoint> Charge Limit` tile disappears from the Home app (and `<loadpoint> Vehicle Limit`, if you used `exposeVehicleLimit`). This is not a re-pair: the bridge and all other accessories stay as they are.
+- Scenes and automations that included the slider lose that one action; the rest of each scene stays. Open your scenes (in particular "close all blinds" style scenes) once and check them.
+- Set the limit in EVCC or in an app that uses `Charge Limit` ([docs/app-contract.md](docs/app-contract.md)).
+- If you really want the old slider back, set `limitWindowCovering: true`. Then every scene or Siri request that closes all blinds changes the charge limit again.
 
 ## Charging history
 

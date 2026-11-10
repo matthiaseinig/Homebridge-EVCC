@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WRITABLE_CHARGE_MODES = void 0;
 exports.parseChargeMode = parseChargeMode;
+exports.parseChargeLimit = parseChargeLimit;
 exports.parsePlanRequest = parsePlanRequest;
 exports.toRfc3339 = toRfc3339;
 /** Modes the plugin forwards to EVCC. Anything else is rejected before EVCC is called. */
@@ -9,6 +10,16 @@ exports.WRITABLE_CHARGE_MODES = ["off", "now", "minpv", "pv"];
 /** Strictly parse a Charge Mode write; undefined when the value is not one of the four modes. */
 function parseChargeMode(value) {
     return typeof value === "string" && exports.WRITABLE_CHARGE_MODES.includes(value)
+        ? value
+        : undefined;
+}
+/**
+ * Strictly parse a Charge Limit write: an integer number 0 .. 100 (0 clears the
+ * session limit in EVCC). Strings, booleans, fractions and non-finite numbers
+ * return undefined.
+ */
+function parseChargeLimit(value) {
+    return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 100
         ? value
         : undefined;
 }

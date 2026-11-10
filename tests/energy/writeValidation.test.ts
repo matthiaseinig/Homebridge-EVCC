@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parseChargeMode, parsePlanRequest, toRfc3339 } from "../../src/energy/writeValidation.js";
+import {
+  parseChargeLimit,
+  parseChargeMode,
+  parsePlanRequest,
+  toRfc3339,
+} from "../../src/energy/writeValidation.js";
 
 const NOW = 1_900_000_000;
 
@@ -8,6 +13,28 @@ describe("parseChargeMode", () => {
     for (const m of ["off", "now", "minpv", "pv"]) expect(parseChargeMode(m)).toBe(m);
     for (const bad of ["Off", "smart", " pv", "", 0, undefined, null, {}]) {
       expect(parseChargeMode(bad)).toBeUndefined();
+    }
+  });
+});
+
+describe("parseChargeLimit", () => {
+  it("accepts integers 0 .. 100 and nothing else", () => {
+    for (const soc of [0, 1, 50, 100]) expect(parseChargeLimit(soc)).toBe(soc);
+    for (const bad of [
+      -1,
+      101,
+      0.5,
+      99.9,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      "80",
+      "",
+      true,
+      null,
+      undefined,
+      {},
+    ]) {
+      expect(parseChargeLimit(bad)).toBeUndefined();
     }
   });
 });
