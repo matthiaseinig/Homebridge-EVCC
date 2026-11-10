@@ -23,6 +23,7 @@ It exposes everything EVCC knows about your home as native HomeKit accessories: 
 - **Per-vehicle presence sensor** — a HomeKit `OccupancySensor` per known vehicle, fires while the vehicle is connected at any loadpoint.
 - **Site telemetry accessory** — home-battery SOC, PV production, grid import/export, and home consumption, all as `LightSensor` services (lux ≈ watts; the customary HomeKit "any number" mapping).
 - **Optional mode switches** — flip the loadpoint UI to 3 mutually-exclusive switches (Now / PV / Min+PV) instead of the single on/off outlet.
+- **Energy characteristics for apps** (read-only, on by default): custom HomeKit services with PV power and energy per array, grid power per phase (signed), home, aux and battery power, battery SoC, meter totals, tariffs, charging statistics, and per-loadpoint charge power, session and today energy, vehicle SoC and range, and the planned departure. The Apple Home app ignores them; apps that read HomeKit directly (such as the Zuhause iOS app) get exact values, units and signs. The UUIDs and units are documented in [docs/zuhause-contract.md](docs/zuhause-contract.md).
 - **Optional battery-mode switches** — Normal / Hold / Charge for your home battery, when an admin password is configured.
 
 ## Install
@@ -77,6 +78,7 @@ sudo npm install -g homebridge-evcc
 | `exposeVehicleLimit` | boolean | no | Add a second WindowCovering per loadpoint that drives the assigned vehicle's `limitSoc`. Default `false`. |
 | `hideSite` | boolean | no | Suppress the site-wide telemetry accessory. Default `false`. |
 | `hideVehiclePresence` | boolean | no | Suppress per-vehicle presence sensors. Default `false`. |
+| `hideEnergyCharacteristics` | boolean | no | Suppress the read-only custom energy services (see [docs/zuhause-contract.md](docs/zuhause-contract.md)). Default `false`. |
 | `debug` | boolean | no | Verbose logging of WS frames and REST traffic. |
 
 Example `config.json` block:
@@ -114,7 +116,7 @@ Every binary signal the plugin exposes can drive a HomeKit automation. Useful pa
 
 ## Architecture
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the data flow, the websocket diff protocol, and the per-accessory service map. The full HomeKit service inventory is in [docs/ACCESSORIES.md](docs/ACCESSORIES.md).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the data flow, the websocket diff protocol, and the per-accessory service map. The full HomeKit service inventory is in [docs/ACCESSORIES.md](docs/ACCESSORIES.md). The custom energy characteristics (UUIDs, units, ranges, signs, EVCC source fields) are specified in [docs/zuhause-contract.md](docs/zuhause-contract.md).
 
 ## Development
 

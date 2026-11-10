@@ -58,6 +58,11 @@ EVCC's read endpoints (state, log areas, etc.) are open. Write endpoints require
 | [`src/accessories/loadpointAccessory.ts`](../src/accessories/loadpointAccessory.ts) | Per-loadpoint accessory: outlet, charge-limit blinds, optional vehicle-limit blinds, vehicle battery, charge-power LightSensor, optional mode switches. |
 | [`src/accessories/siteAccessory.ts`](../src/accessories/siteAccessory.ts) | Site-level accessory: home battery, PV, grid power + direction, home consumption, optional battery-mode switches. |
 | [`src/accessories/vehiclePresenceAccessory.ts`](../src/accessories/vehiclePresenceAccessory.ts) | Per-vehicle OccupancySensor — fires while the vehicle is connected at any loadpoint. |
+| [`src/energy/definitions.ts`](../src/energy/definitions.ts) | UUIDs and metadata of the custom energy characteristics and services (contract: [zuhause-contract.md](zuhause-contract.md)). |
+| [`src/energy/extract.ts`](../src/energy/extract.ts) | Pure mapping from the EVCC state tree to characteristic values (unit conversions, fallbacks). |
+| [`src/energy/sanitize.ts`](../src/energy/sanitize.ts) | Rounding, clamping and defaults so HAP never sees an out-of-range value. |
+| [`src/energy/hapTypes.ts`](../src/energy/hapTypes.ts) | Builds the custom HAP classes at runtime and syncs services on (cached) accessories. |
+| [`src/energy/siteEnergy.ts`](../src/energy/siteEnergy.ts), [`src/energy/loadpointEnergy.ts`](../src/energy/loadpointEnergy.ts) | Custom energy services on the site and loadpoint accessories. |
 | [`src/util/redact.ts`](../src/util/redact.ts) | Password redaction for log output. |
 | [`src/util/powerToLux.ts`](../src/util/powerToLux.ts) | Maps watts onto HomeKit's `CurrentAmbientLightLevel` characteristic, plus `clampPercent` for SOC values. |
 
@@ -68,6 +73,10 @@ HomeKit only exposes a few native services that include a settable 0–100 % sli
 ## Why `LightSensor` for power values?
 
 HomeKit doesn't ship a generic numeric-display service. `LightSensor`'s `CurrentAmbientLightLevel` is the most widely-used "any number" mapping in the Homebridge ecosystem (Eve, the various PV plugins, energy-monitor plugins). It is a `float` with a 0.0001…100000 range, displays as a graph in Eve, and Home shows the current value on the tile. Watts → lux 1:1, clamped at the ceiling.
+
+## Why custom characteristics for app data?
+
+The `LightSensor` mapping above is a display trick for the Home app: it loses the sign, the unit and anything above 100 000. Apps that read HomeKit directly need the real values, so the plugin also exposes read-only custom characteristics with stable UUIDs, documented units and EVCC's sign conventions ([zuhause-contract.md](zuhause-contract.md)). Standard characteristics are used only where the meaning matches exactly. The Home app ignores custom services, so Home-app users see no change.
 
 ## Coverage targets
 
