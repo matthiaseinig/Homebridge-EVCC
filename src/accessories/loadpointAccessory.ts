@@ -27,7 +27,7 @@ export interface LoadpointAccessoryConfig {
   writable: boolean;
   /** Expose the read-only custom Loadpoint Energy service (docs/zuhause-contract.md). Default true. */
   energy?: boolean;
-  /** Expose the Charging History service (needs `energy`). Default false. */
+  /** Expose the Charging History service (needs `energy`). The platform sets it unless `sessions.enabled` is false, so the default is true. */
   sessions?: boolean;
 }
 
@@ -343,12 +343,18 @@ export class LoadpointAccessory {
   private syncControlRoles(): void {
     const controls: Array<[Service | undefined, string, boolean]> = [
       [this.chargingService, CONTROL_ROLES.charging, this.canWrite()],
-      [this.outletService, CONTROL_ROLES.outlet, this.canWrite() && this.config.modeUi !== "switches"],
+      [
+        this.outletService,
+        CONTROL_ROLES.outlet,
+        this.canWrite() && this.config.modeUi !== "switches",
+      ],
       [this.limitLoadpointService, CONTROL_ROLES.limitLoadpoint, this.canWrite()],
       [this.limitVehicleService, CONTROL_ROLES.limitVehicle, this.canWrite()],
-      ...[...this.modeSwitches].map(
-        ([mode, svc]): [Service, string, boolean] => [svc, MODE_ROLES[mode], this.canWrite()],
-      ),
+      ...[...this.modeSwitches].map(([mode, svc]): [Service, string, boolean] => [
+        svc,
+        MODE_ROLES[mode],
+        this.canWrite(),
+      ]),
     ];
     const hap = this.api.hap;
     for (const [svc, role, enabled] of controls) {
@@ -367,14 +373,8 @@ export class LoadpointAccessory {
     return this.config.writable && this.config.modeUi !== "readonly";
   }
 
-  private ensureService(
-    ctor: WithUUID<typeof Service>,
-    name: string,
-    subtype: string,
-  ): Service {
-    const services = (
-      this.accessory as PlatformAccessory & { services: Service[] }
-    ).services;
+  private ensureService(ctor: WithUUID<typeof Service>, name: string, subtype: string): Service {
+    const services = (this.accessory as PlatformAccessory & { services: Service[] }).services;
     const existing = services.find((s) => s.UUID === ctor.UUID && s.subtype === subtype);
     const svc = existing ?? this.accessory.addService(ctor, name, subtype);
     applyServiceName(svc, name, this.api.hap.Characteristic);
@@ -462,12 +462,7 @@ export class LoadpointAccessory {
     try {
       await this.client.setVehicleLimitSoc(name, soc);
     } catch (err) {
-      this.log.warn(
-        "Failed to set vehicle %s limitSoc=%d: %s",
-        name,
-        soc,
-        (err as Error).message,
-      );
+      this.log.warn("Failed to set vehicle %s limitSoc=%d: %s", name, soc, (err as Error).message);
       throw this.hapError("SERVICE_COMMUNICATION_FAILURE");
     }
   }

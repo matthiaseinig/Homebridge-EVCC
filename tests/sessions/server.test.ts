@@ -67,6 +67,13 @@ describe("SessionsServer construction", () => {
     ).toThrow(/token/);
   });
 
+  it("refuses a zoned link-local bind address", () => {
+    const store = new SessionStore(tempDir(), 10);
+    expect(
+      () => new SessionsServer({ bindAddress: "fe80::1%en0", port: 0, token: TOKEN, store }),
+    ).toThrow(/private/);
+  });
+
   it("stop is safe before start and twice", async () => {
     const server = new SessionsServer({
       bindAddress: "127.0.0.1",
@@ -98,6 +105,9 @@ describe("SessionsServer security", () => {
     expect((await get("/v1/status", { token: null })).status).toBe(401);
     expect((await get("/v1/status", { token: "wrong" })).status).toBe(401);
     expect((await get("/v1/status", { token: TOKEN.slice(0, -1) })).status).toBe(401);
+    expect((await get("/v1/status", { token: `${TOKEN}x` })).status).toBe(401);
+    expect((await get("/v1/status", { token: `${TOKEN.slice(0, -1)}#` })).status).toBe(401);
+    expect((await get("/v1/status", { token: TOKEN })).status).toBe(200);
     expect((await get("/v1/status")).status).toBe(200);
   });
 

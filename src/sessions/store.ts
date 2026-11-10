@@ -39,6 +39,8 @@ export class SessionStore {
   private updatedAt: number | null = null;
   private lastSaved = "";
   private writing: Promise<void> = Promise.resolve();
+  /** Set when an unreadable file could not be moved aside: nothing is written, so it is never overwritten. */
+  private blocked = false;
   /** Short note about the last failed fetch; not persisted. */
   lastError: string | null = null;
 
@@ -66,8 +68,11 @@ export class SessionStore {
     let text: string;
     try {
       text = await readFile(this.file, "utf8");
-    } catch {
-      return {};
+    } catch (err) {
+      // Only a missing file is a fresh start. Any other read error (permissions, I/O) leaves a file that may hold the
+      // log, so it is moved aside like a corrupt one and never overwritten.
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return {};
+      return { backup: await this.moveAside(nowMs) };
     }
     try {
       const data = JSON.parse(text) as Partial<StoreFile>;
@@ -84,7 +89,17 @@ export class SessionStore {
       this.lastSaved = this.serialize();
       return {};
     } catch {
-      return { backup: await backupAside(this.file, nowMs) };
+      return { backup: await this.moveAside(nowMs) };
+    }
+  }
+
+  /** Move the unreadable file aside; when that fails, block saving and rethrow so the file stays untouched. */
+  private async moveAside(nowMs: number): Promise<string> {
+    try {
+      return await backupAside(this.file, nowMs);
+    } catch (err) {
+      this.blocked = true;
+      throw err;
     }
   }
 
@@ -123,6 +138,7 @@ export class SessionStore {
   /** Persist when something changed; writes never overlap. */
   save(): Promise<void> {
     const next = this.writing.then(async () => {
+      if (this.blocked) return;
       const data = this.serialize();
       if (data === this.lastSaved) return;
       await writeFileAtomic(this.file, data);

@@ -24,6 +24,8 @@ class SessionsService {
     running = false;
     refreshing = null;
     stopped = true;
+    /** Bumped by every start and stop, so a start that is still loading knows it was stopped meanwhile. */
+    generation = 0;
     flags = new Map();
     listeners = new Set();
     now;
@@ -37,6 +39,8 @@ class SessionsService {
     }
     async start() {
         this.stopped = false;
+        const generation = ++this.generation;
+        const live = () => generation === this.generation;
         const { log } = this.opts;
         try {
             const loaded = await this.store.load(this.now());
@@ -47,13 +51,21 @@ class SessionsService {
         catch (err) {
             log.warn("Could not read the session log: %s", err.message);
         }
+        if (!live())
+            return;
         this.emit();
-        await this.startApi();
+        await this.startApi(live);
+        if (!live())
+            return;
         await this.refresh();
+        if (!live())
+            return;
         this.schedulePoll();
     }
     stop() {
         this.stopped = true;
+        this.generation++;
+        this.running = false;
         if (this.pollTimer)
             clearTimeout(this.pollTimer);
         if (this.soonTimer)
@@ -132,13 +144,15 @@ class SessionsService {
         }, this.opts.pollIntervalMs ?? exports.POLL_INTERVAL_MS);
         this.pollTimer.unref?.();
     }
-    async startApi() {
+    async startApi(live) {
         const api = this.opts.api;
         if (!api || this.running)
             return;
         const { log } = this.opts;
         try {
             const token = await (0, token_js_1.resolveApiToken)(this.opts.dir, api.token);
+            if (!live())
+                return;
             const server = new server_js_1.SessionsServer({
                 bindAddress: api.bindAddress,
                 port: api.port,
@@ -146,6 +160,10 @@ class SessionsService {
                 store: this.store,
             });
             const port = await server.start();
+            if (!live()) {
+                await server.stop();
+                return;
+            }
             this.server = server;
             this.running = true;
             log.info("Sessions API listening on %s:%d (GET only, bearer token required)", api.bindAddress, port);

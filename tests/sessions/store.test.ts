@@ -1,4 +1,12 @@
-import { chmodSync, existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { normalizeSessions } from "../../src/sessions/model.js";
@@ -52,6 +60,44 @@ describe("SessionStore persistence", () => {
       expect(existsSync(join(dir, STORE_FILE))).toBe(false);
       expect(store.count).toBe(0);
     }
+  });
+
+  it("moves a file that cannot be read (any error except a missing file) aside, never overwrites it", async () => {
+    const dir = tempDir();
+    const file = join(dir, STORE_FILE);
+    const content = JSON.stringify({ schema: 1, currency: "EUR", lastUpdate: 1, sessions: [] });
+    writeFileSync(file, content);
+    chmodSync(file, 0o000);
+    const store = new SessionStore(dir, 10);
+    const result = await store.load(7);
+    expect(result.backup).toBe(join(dir, `${STORE_FILE}.bak-7`));
+    expect(existsSync(file)).toBe(false);
+    chmodSync(result.backup!, 0o600);
+    expect(readFileSync(result.backup!, "utf8")).toBe(content);
+    // A directory in place of the file is also a read error (EISDIR), not an empty start.
+    const other = tempDir();
+    mkdirSync(join(other, STORE_FILE));
+    const second = await new SessionStore(other, 10).load(8);
+    expect(second.backup).toBe(join(other, `${STORE_FILE}.bak-8`));
+  });
+
+  it("writes nothing when the unreadable file could not be moved aside", async () => {
+    const dir = tempDir();
+    const file = join(dir, STORE_FILE);
+    const content = JSON.stringify({ schema: 1, currency: "EUR", lastUpdate: 1, sessions: [] });
+    writeFileSync(file, content);
+    chmodSync(file, 0o000);
+    chmodSync(dir, 0o500); // no rename in this folder
+    const store = new SessionStore(dir, 10);
+    try {
+      await expect(store.load(9)).rejects.toThrow();
+    } finally {
+      chmodSync(dir, 0o700);
+    }
+    await store.update(make([1]), "EUR", 5);
+    chmodSync(file, 0o600);
+    expect(readFileSync(file, "utf8")).toBe(content);
+    expect(readdirSync(dir).filter((f) => f.includes("bak") || f.includes("tmp"))).toEqual([]);
   });
 
   it("skips stored entries that are not sessions", async () => {

@@ -10,10 +10,11 @@ const summary_js_1 = require("./summary.js");
 /** Default and maximum page size of /v1/sessions. */
 exports.DEFAULT_PAGE = 200;
 exports.MAX_PAGE = 1000;
+/** Constant time comparison of the SHA-256 digests, so neither the content nor the length of the token leaks. */
 function safeEqual(a, b) {
-    const ba = Buffer.from(a);
-    const bb = Buffer.from(b);
-    return ba.length === bb.length && (0, node_crypto_1.timingSafeEqual)(ba, bb);
+    const da = (0, node_crypto_1.createHash)("sha256").update(a).digest();
+    const db = (0, node_crypto_1.createHash)("sha256").update(b).digest();
+    return (0, node_crypto_1.timingSafeEqual)(da, db);
 }
 const DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
 /**
@@ -71,7 +72,7 @@ class SessionsServer {
     allowedHost = "";
     constructor(opts) {
         this.opts = opts;
-        if (!(0, config_js_1.isPrivateAddress)(opts.bindAddress)) {
+        if (opts.bindAddress.includes("%") || !(0, config_js_1.isPrivateAddress)(opts.bindAddress)) {
             throw new Error("sessions API must bind to a private or loopback address");
         }
         if (!opts.token)

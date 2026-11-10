@@ -70,6 +70,17 @@ describe("parseSessionsConfig", () => {
     }
   });
 
+  it("rejects a zoned link-local bind address and turns the API off with a message", () => {
+    for (const bindAddress of ["fe80::1%en0", "fe80::1%1", "FE80::abcd%eth0"]) {
+      const bad = parseSessionsConfig({ api: { enabled: true, bindAddress } });
+      expect(bad.config.api).toBeUndefined();
+      expect(bad.errors[0]).toContain("zone");
+    }
+    expect(
+      parseSessionsConfig({ api: { enabled: true, bindAddress: "fe80::1" } }).config.api,
+    ).toBeDefined();
+  });
+
   it("keeps the API off unless it is enabled", () => {
     expect(parseSessionsConfig({ api: { bindAddress: "127.0.0.1" } }).config.api).toBeUndefined();
   });

@@ -23,6 +23,8 @@ class SessionStore {
     updatedAt = null;
     lastSaved = "";
     writing = Promise.resolve();
+    /** Set when an unreadable file could not be moved aside: nothing is written, so it is never overwritten. */
+    blocked = false;
     /** Short note about the last failed fetch; not persisted. */
     lastError = null;
     constructor(dir, maxSessions) {
@@ -44,8 +46,12 @@ class SessionStore {
         try {
             text = await (0, promises_1.readFile)(this.file, "utf8");
         }
-        catch {
-            return {};
+        catch (err) {
+            // Only a missing file is a fresh start. Any other read error (permissions, I/O) leaves a file that may hold the
+            // log, so it is moved aside like a corrupt one and never overwritten.
+            if (err.code === "ENOENT")
+                return {};
+            return { backup: await this.moveAside(nowMs) };
         }
         try {
             const data = JSON.parse(text);
@@ -62,7 +68,17 @@ class SessionStore {
             return {};
         }
         catch {
-            return { backup: await (0, fsutil_js_1.backupAside)(this.file, nowMs) };
+            return { backup: await this.moveAside(nowMs) };
+        }
+    }
+    /** Move the unreadable file aside; when that fails, block saving and rethrow so the file stays untouched. */
+    async moveAside(nowMs) {
+        try {
+            return await (0, fsutil_js_1.backupAside)(this.file, nowMs);
+        }
+        catch (err) {
+            this.blocked = true;
+            throw err;
         }
     }
     /** Merge fetched sessions (newer data wins per key), prune and persist. */
@@ -95,6 +111,8 @@ class SessionStore {
     /** Persist when something changed; writes never overlap. */
     save() {
         const next = this.writing.then(async () => {
+            if (this.blocked)
+                return;
             const data = this.serialize();
             if (data === this.lastSaved)
                 return;

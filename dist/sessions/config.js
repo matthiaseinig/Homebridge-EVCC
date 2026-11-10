@@ -51,7 +51,10 @@ function parseSessionsConfig(raw) {
     if (a.enabled === true) {
         const bindAddress = str(a.bindAddress);
         const token = str(a.token);
-        if (!isPrivateAddress(bindAddress)) {
+        if (bindAddress.includes("%")) {
+            errors.push("sessions.api.bindAddress must not carry a zone id (fe80::1%en0 is not accepted), use an address without it, sessions API is off");
+        }
+        else if (!isPrivateAddress(bindAddress)) {
             errors.push("sessions.api.bindAddress must be a literal private or loopback IP address (not 0.0.0.0, not a host name), sessions API is off");
         }
         else if (token !== "" && token.length < token_js_1.MIN_CONFIGURED_TOKEN_LENGTH) {

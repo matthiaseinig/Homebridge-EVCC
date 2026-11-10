@@ -73,6 +73,22 @@ describe("normalizeSession", () => {
   });
 });
 
+describe("a realistic EVCC /api/sessions payload", () => {
+  // The shape of evcc-io/evcc core/session/session.go as encoding/json writes it: chargeDuration is a Go
+  // time.Duration, so integer nanoseconds (1h 30m = 5400000000000), no custom marshaller. Values invented.
+  const payload = `[{"id": 12, "created": "2026-03-10T08:00:00.123456+01:00", "finished": "2026-03-10T09:31:02.5+01:00",
+    "loadpoint": "Carport", "identifier": "", "vehicle": "Car A", "odometer": 12345.6, "meterStart": 100.1,
+    "meterStop": 111.3, "chargedEnergy": 11.2, "chargeDuration": 5400000000000, "socStart": 40, "socEnd": 62,
+    "addedRange": 90, "solarPercentage": 37.5, "price": 2.8, "pricePerKWh": 0.25, "co2PerKWh": 120.5,
+    "referencePricePerKWh": 0.3, "referenceCo2PerKWh": 380}]`;
+
+  it("reads the nanoseconds as seconds", () => {
+    const [session] = normalizeSessions(JSON.parse(payload) as unknown[]);
+    expect(session.chargeDurationSeconds).toBe(5400);
+    expect(session.chargedKWh).toBe(11.2);
+  });
+});
+
 describe("durationSeconds", () => {
   it("converts nanoseconds and accepts seconds", () => {
     expect(durationSeconds(5_400_000_000_000)).toBe(5400);

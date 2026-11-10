@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { isPrivateAddress } from "./config.js";
 import type { ChargingSession } from "./model.js";
 import { parseCursor, type SessionStore, type TimeRange } from "./store.js";
@@ -17,10 +17,11 @@ export interface SessionsServerOptions {
   store: SessionStore;
 }
 
+/** Constant time comparison of the SHA-256 digests, so neither the content nor the length of the token leaks. */
 function safeEqual(a: string, b: string): boolean {
-  const ba = Buffer.from(a);
-  const bb = Buffer.from(b);
-  return ba.length === bb.length && timingSafeEqual(ba, bb);
+  const da = createHash("sha256").update(a).digest();
+  const db = createHash("sha256").update(b).digest();
+  return timingSafeEqual(da, db);
 }
 
 const DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -80,7 +81,7 @@ export class SessionsServer {
   private allowedHost = "";
 
   constructor(private readonly opts: SessionsServerOptions) {
-    if (!isPrivateAddress(opts.bindAddress)) {
+    if (opts.bindAddress.includes("%") || !isPrivateAddress(opts.bindAddress)) {
       throw new Error("sessions API must bind to a private or loopback address");
     }
     if (!opts.token) throw new Error("sessions API needs a token");

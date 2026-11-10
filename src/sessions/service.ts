@@ -43,6 +43,8 @@ export class SessionsService {
   private running = false;
   private refreshing: Promise<void> | null = null;
   private stopped = true;
+  /** Bumped by every start and stop, so a start that is still loading knows it was stopped meanwhile. */
+  private generation = 0;
   private readonly flags = new Map<string, boolean>();
   private readonly listeners = new Set<() => void>();
   private readonly now: () => number;
@@ -58,6 +60,8 @@ export class SessionsService {
 
   async start(): Promise<void> {
     this.stopped = false;
+    const generation = ++this.generation;
+    const live = (): boolean => generation === this.generation;
     const { log } = this.opts;
     try {
       const loaded = await this.store.load(this.now());
@@ -67,14 +71,19 @@ export class SessionsService {
     } catch (err) {
       log.warn("Could not read the session log: %s", (err as Error).message);
     }
+    if (!live()) return;
     this.emit();
-    await this.startApi();
+    await this.startApi(live);
+    if (!live()) return;
     await this.refresh();
+    if (!live()) return;
     this.schedulePoll();
   }
 
   stop(): void {
     this.stopped = true;
+    this.generation++;
+    this.running = false;
     if (this.pollTimer) clearTimeout(this.pollTimer);
     if (this.soonTimer) clearTimeout(this.soonTimer);
     this.pollTimer = null;
@@ -156,12 +165,13 @@ export class SessionsService {
     this.pollTimer.unref?.();
   }
 
-  private async startApi(): Promise<void> {
+  private async startApi(live: () => boolean): Promise<void> {
     const api = this.opts.api;
     if (!api || this.running) return;
     const { log } = this.opts;
     try {
       const token = await resolveApiToken(this.opts.dir, api.token);
+      if (!live()) return;
       const server = new SessionsServer({
         bindAddress: api.bindAddress,
         port: api.port,
@@ -169,6 +179,10 @@ export class SessionsService {
         store: this.store,
       });
       const port = await server.start();
+      if (!live()) {
+        await server.stop();
+        return;
+      }
       this.server = server;
       this.running = true;
       log.info(

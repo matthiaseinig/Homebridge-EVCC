@@ -256,10 +256,18 @@ class LoadpointAccessory {
     syncControlRoles() {
         const controls = [
             [this.chargingService, definitions_js_1.CONTROL_ROLES.charging, this.canWrite()],
-            [this.outletService, definitions_js_1.CONTROL_ROLES.outlet, this.canWrite() && this.config.modeUi !== "switches"],
+            [
+                this.outletService,
+                definitions_js_1.CONTROL_ROLES.outlet,
+                this.canWrite() && this.config.modeUi !== "switches",
+            ],
             [this.limitLoadpointService, definitions_js_1.CONTROL_ROLES.limitLoadpoint, this.canWrite()],
             [this.limitVehicleService, definitions_js_1.CONTROL_ROLES.limitVehicle, this.canWrite()],
-            ...[...this.modeSwitches].map(([mode, svc]) => [svc, MODE_ROLES[mode], this.canWrite()]),
+            ...[...this.modeSwitches].map(([mode, svc]) => [
+                svc,
+                MODE_ROLES[mode],
+                this.canWrite(),
+            ]),
         ];
         const hap = this.api.hap;
         for (const [svc, role, enabled] of controls) {

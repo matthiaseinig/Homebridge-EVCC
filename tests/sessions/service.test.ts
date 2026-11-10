@@ -75,6 +75,39 @@ describe("SessionsService polling", () => {
     expect(getSessions).toHaveBeenCalledTimes(3);
   });
 
+  it("a stop while the log is still loading prevents the API from binding and the first fetch", async () => {
+    const dir = tempDir();
+    const { service, log, getSessions } = build({
+      dir,
+      api: { bindAddress: "127.0.0.1", port: 0, token: "t".repeat(32) },
+    });
+    const started = service.start();
+    service.stop();
+    await started;
+    expect(getSessions).not.toHaveBeenCalled();
+    expect(log.info).not.toHaveBeenCalledWith(
+      expect.stringContaining("Sessions API listening"),
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(() => statSync(join(dir, TOKEN_FILE))).toThrow();
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 2);
+    expect(getSessions).not.toHaveBeenCalled();
+  });
+
+  it("a stop while the API is binding closes the server again, and a later start works", async () => {
+    const { service, getSessions } = build({
+      api: { bindAddress: "127.0.0.1", port: 0, token: "t".repeat(32) },
+    });
+    const started = service.start();
+    await vi.waitFor(() => expect(getSessions).not.toHaveBeenCalled());
+    service.stop();
+    await started;
+    expect(getSessions).not.toHaveBeenCalled();
+    await service.start();
+    expect(getSessions).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps the old data and records the error when a fetch fails", async () => {
     let fail = false;
     const { service, log } = build({
