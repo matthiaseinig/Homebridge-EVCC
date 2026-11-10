@@ -5,9 +5,10 @@
  * or service membership fails the build.
  */
 import {
+  CHARGING_SERVICE_KEYS,
   CHARS,
-  RETIRED,
   SERVICES,
+  SITE_SERVICE_KEYS,
   type CharDef,
   type CharKey,
 } from "../../src/energy/definitions.js";
@@ -31,12 +32,13 @@ function resolution(c: CharDef): string {
 
 export function charRow(key: CharKey): string {
   const c: CharDef = CHARS[key];
-  return `| ${c.name} (\`${key}\`) | \`${c.uuid}\` | ${c.format} | ${c.unit ?? ""} | ${range(c)} | ${resolution(c)} | ${c.sign ?? ""} | ${c.source} |`;
+  const access = c.writable ? "read, write, notify" : "read, notify";
+  return `| ${c.name} (\`${key}\`) | \`${c.uuid}\` | ${c.format} | ${access} | ${c.unit ?? ""} | ${range(c)} | ${resolution(c)} | ${c.sign ?? ""} | ${c.source} |`;
 }
 
 const CHAR_HEADER = [
-  "| Characteristic | UUID | Format | Unit | Range | Resolution | Sign or domain | EVCC source |",
-  "|---|---|---|---|---|---|---|---|",
+  "| Characteristic | UUID | Format | Access | Unit | Range | Resolution | Sign or domain | EVCC source |",
+  "|---|---|---|---|---|---|---|---|---|",
 ];
 
 export function serviceBlock(key: keyof typeof SERVICES): string {
@@ -49,30 +51,22 @@ export function controlTagBlock(): string {
 }
 
 export function serviceTable(): string {
-  const rows = Object.entries(SERVICES).map(
-    ([key, s]) => `| ${s.name} (\`${key}\`) | \`${s.uuid}\` |`,
-  );
-  return ["| Service | UUID |", "|---|---|", ...rows].join("\n");
-}
-
-export function retiredTable(): string {
-  const rows = [
-    ...Object.entries(RETIRED.services).map(
-      ([uuid, name]) => `| \`${uuid}\` | service | ${name} |`,
-    ),
-    ...Object.entries(RETIRED.characteristics).map(
-      ([uuid, name]) => `| \`${uuid}\` | characteristic | ${name} |`,
-    ),
-  ];
-  return ["| UUID | Kind | Former name |", "|---|---|---|", ...rows].join("\n");
+  const row = (key: keyof typeof SERVICES, group: string): string =>
+    `| ${SERVICES[key].name} (\`${key}\`) | \`${SERVICES[key].uuid}\` | ${group} |`;
+  return [
+    "| Service | UUID | Section |",
+    "|---|---|---|",
+    ...SITE_SERVICE_KEYS.map((k) => row(k, "site energy")),
+    ...CHARGING_SERVICE_KEYS.map((k) => row(k, "charging")),
+  ].join("\n");
 }
 
 /** Every generated block, in document order. */
 export function allBlocks(): string[] {
   return [
     serviceTable(),
-    ...(Object.keys(SERVICES) as Array<keyof typeof SERVICES>).map(serviceBlock),
+    ...SITE_SERVICE_KEYS.map(serviceBlock),
+    ...CHARGING_SERVICE_KEYS.map(serviceBlock),
     controlTagBlock(),
-    retiredTable(),
   ];
 }

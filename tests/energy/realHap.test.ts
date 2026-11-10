@@ -11,11 +11,10 @@ import { describe, expect, it } from "vitest";
 import { LoadpointAccessory } from "../../src/accessories/loadpointAccessory.js";
 import type { EvccClient } from "../../src/api/client.js";
 import type { EvccState } from "../../src/api/types.js";
-import {
-  ChargingStatisticsServices,
-  MISSING_SNAPSHOTS_BEFORE_REMOVAL,
-} from "../../src/energy/chargingStatistics.js";
-import { CHARS, RETIRED, SERVICES, type CharKey } from "../../src/energy/definitions.js";
+import { ChargingStatisticsServices } from "../../src/energy/chargingStatistics.js";
+import { CHARS, SERVICES, type CharKey } from "../../src/energy/definitions.js";
+import { MISSING_SNAPSHOTS_BEFORE_REMOVAL } from "../../src/energy/serviceSet.js";
+import { SiteEnergyServices } from "../../src/energy/siteEnergy.js";
 import { energyHapTypes } from "../../src/energy/hapTypes.js";
 import { LoadpointEnergyService } from "../../src/energy/loadpointEnergy.js";
 import { createMockLogger } from "../helpers/homebridge.js";
@@ -94,12 +93,35 @@ describe("custom types on real HAP-NodeJS", () => {
     );
   });
 
-  it("no custom characteristic is writable", () => {
+  it("only Charge Mode and Set Plan are writable; everything else is read and notify", () => {
     const types = energyHapTypes(hap);
     for (const key of Object.keys(CHARS) as CharKey[]) {
       const c = new (types.char(key))();
-      expect(c.props.perms, key).toEqual(["pr", "ev"]);
+      const expected =
+        key === "ChargeMode" || key === "SetPlan" ? ["pr", "pw", "ev"] : ["pr", "ev"];
+      expect(c.props.perms, key).toEqual(expected);
     }
+  });
+
+  it("applies the fixture to the site accessory without any HAP warning", () => {
+    const acc = newAccessory("site");
+    const warnings = collectWarnings(acc);
+    new SiteEnergyServices(api, acc, () => 1_900_000_000_000).apply(energyFixture(), true);
+    const site = find(acc, SERVICES.EnergySite.uuid, "energy-site");
+    expect(value(site, "GridPower")).toBe(-1250.1);
+    expect(value(site, "GridPowerL3")).toBe(-425);
+    expect(value(site, "GridCurrentL1")).toBe(-1.74);
+    expect(value(site, "BatterySoc")).toBe(55.6);
+    expect(value(site, "GreenShareHome")).toBe(87.5);
+    expect(value(site, "Currency")).toBe("EUR");
+    expect(value(site, "LastUpdate")).toBe(1_900_000_000);
+    const pv1 = find(acc, SERVICES.PvArray.uuid, "pv:pv1");
+    expect(value(pv1, "MeterPower")).toBe(2100.4);
+    expect(value(pv1, "MeterEnergyTotal")).toBe(1234.568);
+    expect(value(pv1, "MeterId")).toBe("pv1");
+    expect(pv1?.getCharacteristic(hap.Characteristic.Name).value).toBe("Array A");
+    expect(find(acc, SERVICES.AuxMeter.uuid, "aux:aux1")).toBeDefined();
+    expect(warnings).toEqual([]);
   });
 
   it("applies charging statistics without any HAP warning", () => {
@@ -150,6 +172,7 @@ describe("custom types on real HAP-NodeJS", () => {
       svc.characteristics.find((c) => c.UUID === CHARS.ControlRole.uuid)?.value;
     const roles = acc.services.map(role).filter((r) => r !== undefined);
     expect(roles.sort()).toEqual([
+      "loadpoint-charging",
       "loadpoint-enable",
       "loadpoint-limit-soc",
       "loadpoint-mode-minpv",
@@ -228,13 +251,28 @@ describe("custom types on real HAP-NodeJS", () => {
     expect(acc.services.some((s) => s.UUID === SERVICES.ChargingStatistics.uuid)).toBe(false);
   });
 
-  it("removes services with retired site-energy UUIDs from a cached accessory", () => {
-    const acc = newAccessory("retired");
-    for (const uuid of Object.keys(RETIRED.services)) {
-      acc.addService(new hap.Service("old", uuid, "x"));
-    }
-    new ChargingStatisticsServices(api, acc);
-    expect(acc.services.some((s) => s.UUID in RETIRED.services)).toBe(false);
-    expect(acc.services.some((s) => s.UUID === hap.Service.AccessoryInformation.UUID)).toBe(true);
+  it("surfaces write validation and EVCC failures as HAP status codes", async () => {
+    const acc = newAccessory("writes");
+    const setLoadpointMode = async (): Promise<void> => {
+      throw new Error("HTTP 500");
+    };
+    new LoadpointAccessory({
+      api,
+      log: createMockLogger(),
+      client: { setLoadpointMode } as unknown as EvccClient,
+      accessory: acc,
+      loadpointId: 0,
+      state: energyFixture().loadpoints![0],
+      config: { modeUi: "outlet", defaultMode: "pv", exposeVehicleLimit: false, writable: true },
+    });
+    const svc = find(acc, SERVICES.LoadpointEnergy.uuid, "loadpoint-energy")!;
+    const mode = svc.getCharacteristic(energyHapTypes(hap).char("ChargeMode"));
+    await expect(mode.handleSetRequest("bogus")).rejects.toBe(
+      hapNodejs.HAPStatus.INVALID_VALUE_IN_REQUEST,
+    );
+    await expect(mode.handleSetRequest("now")).rejects.toBe(
+      hapNodejs.HAPStatus.SERVICE_COMMUNICATION_FAILURE,
+    );
+    expect(mode.value).toBe("pv");
   });
 });

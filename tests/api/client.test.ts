@@ -102,6 +102,24 @@ describe("EvccClient login + writes", () => {
     ]);
   });
 
+  it("sets and deletes a vehicle SoC plan with the right method and path", async () => {
+    const { client, fetch } = buildClient();
+    await client.setVehiclePlanSoc("db:7", 80.2, "2030-01-02T06:30:00Z");
+    await client.deleteVehiclePlanSoc("db:7");
+    expect(fetch.calls.map((c) => [c.init?.method, c.url])).toEqual([
+      ["POST", "http://evcc.local:7070/api/vehicles/db%3A7/plan/soc/80/2030-01-02T06:30:00Z"],
+      ["DELETE", "http://evcc.local:7070/api/vehicles/db%3A7/plan/soc"],
+    ]);
+  });
+
+  it("names the method in the error of a rejected DELETE", async () => {
+    const { client, fetch } = buildClient();
+    fetch.push("/plan/soc", { status: 400 });
+    await expect(client.deleteVehiclePlanSoc("car1")).rejects.toThrow(
+      "DELETE /api/vehicles/car1/plan/soc HTTP 400",
+    );
+  });
+
   it("raises and clears the cookie on a 401 from a write", async () => {
     const { client, fetch } = buildClient({ password: "secret" });
     // Successful login + state.

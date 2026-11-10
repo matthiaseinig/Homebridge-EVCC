@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.sanitize = sanitize;
 exports.toEpochSeconds = toEpochSeconds;
 exports.whToKwh = whToKwh;
+exports.shareToPercent = shareToPercent;
 exports.num = num;
 exports.str = str;
 exports.bool = bool;
@@ -46,6 +47,10 @@ function toEpochSeconds(value) {
 /** Watt-hours to kilowatt-hours; undefined stays undefined. */
 function whToKwh(value) {
     return typeof value === "number" && Number.isFinite(value) ? value / 1000 : undefined;
+}
+/** A 0..1 share to percent; undefined stays undefined. */
+function shareToPercent(value) {
+    return typeof value === "number" && Number.isFinite(value) ? value * 100 : undefined;
 }
 function num(value) {
     return typeof value === "number" && Number.isFinite(value) ? value : undefined;

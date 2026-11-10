@@ -1,11 +1,15 @@
-import type { API, PlatformAccessory } from "homebridge";
+import type { API, PlatformAccessory, Service } from "homebridge";
 import type { LoadpointState } from "../api/types.js";
 import { loadpointValues } from "./extract.js";
 import { applyValues, ensureEnergyService, pruneServices } from "./hapTypes.js";
 
 export const SUBTYPE_LOADPOINT_ENERGY = "loadpoint-energy";
 
-/** Read-only custom "Loadpoint Energy" service on a loadpoint accessory. */
+/**
+ * Custom "Loadpoint Energy" service on a loadpoint accessory. Read-only
+ * except Charge Mode and Set Plan, whose write handlers the loadpoint
+ * accessory registers.
+ */
 export class LoadpointEnergyService {
   constructor(
     private readonly api: API,
@@ -13,14 +17,19 @@ export class LoadpointEnergyService {
     private readonly now: () => number = Date.now,
   ) {}
 
-  apply(state: LoadpointState, title: string): void {
-    const svc = ensureEnergyService(
+  /** Find or create the service. */
+  ensure(title: string): Service {
+    return ensureEnergyService(
       this.api.hap,
       this.accessory,
       "LoadpointEnergy",
       `${title} Energy`,
       SUBTYPE_LOADPOINT_ENERGY,
     );
+  }
+
+  apply(state: LoadpointState, title: string): void {
+    const svc = this.ensure(title);
     applyValues(this.api.hap, svc, loadpointValues(state, Math.floor(this.now() / 1000)));
   }
 

@@ -2,7 +2,9 @@ import type { API, Logging, PlatformAccessory, Service, WithUUID } from "homebri
 import type { EvccClient } from "../api/client.js";
 import type { ChargeMode, LoadpointState } from "../api/types.js";
 import { CONTROL_ROLES } from "../energy/definitions.js";
+import { parseChargeMode, parsePlanRequest, toRfc3339 } from "../energy/writeValidation.js";
 import {
+  energyHapTypes,
   ensureCustomCharacteristic,
   removeCustomCharacteristic,
 } from "../energy/hapTypes.js";
@@ -94,6 +96,8 @@ export class LoadpointAccessory {
   private powerService?: Service;
   private readonly modeSwitches = new Map<ChargeMode, Service>();
   private readonly energy: LoadpointEnergyService;
+  private chargingService?: Service;
+  private readonly now: () => number;
   private readonly energyEnabled: boolean;
 
   constructor(deps: LoadpointAccessoryDeps) {
@@ -114,8 +118,14 @@ export class LoadpointAccessory {
     if (this.config.modeUi === "switches") this.configureModeSwitches();
 
     this.energyEnabled = this.config.energy ?? true;
-    this.energy = new LoadpointEnergyService(this.api, this.accessory, deps.now);
-    if (!this.energyEnabled) this.energy.remove();
+    this.now = deps.now ?? Date.now;
+    this.energy = new LoadpointEnergyService(this.api, this.accessory, this.now);
+    if (this.energyEnabled) {
+      this.chargingService = this.energy.ensure(this.title());
+      this.configureChargingWrites(this.chargingService);
+    } else {
+      this.energy.remove();
+    }
     this.syncControlRoles();
 
     this.applyState(this.state);
@@ -314,6 +324,7 @@ export class LoadpointAccessory {
   /** Tag each control service with its role and whether writes reach EVCC. */
   private syncControlRoles(): void {
     const controls: Array<[Service | undefined, string, boolean]> = [
+      [this.chargingService, CONTROL_ROLES.charging, this.canWrite()],
       [this.outletService, CONTROL_ROLES.outlet, this.canWrite() && this.config.modeUi !== "switches"],
       [this.limitLoadpointService, CONTROL_ROLES.limitLoadpoint, this.canWrite()],
       [this.limitVehicleService, CONTROL_ROLES.limitVehicle, this.canWrite()],
@@ -352,6 +363,54 @@ export class LoadpointAccessory {
     return svc;
   }
 
+  /** Charge Mode and Set Plan on the Loadpoint Energy service accept writes (validated strictly). */
+  private configureChargingWrites(svc: Service): void {
+    const types = energyHapTypes(this.api.hap);
+    svc.getCharacteristic(types.char("ChargeMode")).onSet(async (value) => {
+      this.requireWritable();
+      const mode = parseChargeMode(value);
+      if (!mode) throw this.hapError("INVALID_VALUE_IN_REQUEST");
+      await this.safeSetMode(mode);
+    });
+    svc.getCharacteristic(types.char("SetPlan")).onSet(async (value) => {
+      this.requireWritable();
+      const request = parsePlanRequest(value, Math.floor(this.now() / 1000));
+      if (!request) throw this.hapError("INVALID_VALUE_IN_REQUEST");
+      // EVCC keeps SoC plans per vehicle; the plan goes to the vehicle at this loadpoint.
+      const vehicle = this.state.vehicleName;
+      if (!vehicle) throw this.hapError("NOT_ALLOWED_IN_CURRENT_STATE");
+      try {
+        if (request.kind === "clear") await this.client.deleteVehiclePlanSoc(vehicle);
+        else await this.client.setVehiclePlanSoc(vehicle, request.soc, toRfc3339(request.time));
+      } catch (err) {
+        this.log.warn("Failed to set plan for vehicle %s: %s", vehicle, (err as Error).message);
+        throw this.hapError("SERVICE_COMMUNICATION_FAILURE");
+      }
+    });
+  }
+
+  private requireWritable(): void {
+    if (!this.canWrite()) throw this.hapError("INSUFFICIENT_PRIVILEGES");
+  }
+
+  private hapError(
+    status:
+      | "SERVICE_COMMUNICATION_FAILURE"
+      | "INVALID_VALUE_IN_REQUEST"
+      | "NOT_ALLOWED_IN_CURRENT_STATE"
+      | "INSUFFICIENT_PRIVILEGES",
+  ): Error {
+    const hap = this.api.hap;
+    const code = {
+      SERVICE_COMMUNICATION_FAILURE: hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE,
+      INVALID_VALUE_IN_REQUEST: hap.HAPStatus.INVALID_VALUE_IN_REQUEST,
+      NOT_ALLOWED_IN_CURRENT_STATE: hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE,
+      INSUFFICIENT_PRIVILEGES: hap.HAPStatus.INSUFFICIENT_PRIVILEGES,
+    }[status];
+    return new this.api.hap.HapStatusError(code);
+  }
+
+  /** Forward a mode change; an EVCC failure becomes a HAP communication error. */
   private async safeSetMode(mode: ChargeMode): Promise<void> {
     try {
       // EVCC REST API uses 1-based loadpoint IDs.
@@ -363,6 +422,7 @@ export class LoadpointAccessory {
         mode,
         (err as Error).message,
       );
+      throw this.hapError("SERVICE_COMMUNICATION_FAILURE");
     }
   }
 
@@ -376,6 +436,7 @@ export class LoadpointAccessory {
         soc,
         (err as Error).message,
       );
+      throw this.hapError("SERVICE_COMMUNICATION_FAILURE");
     }
   }
 
@@ -389,6 +450,7 @@ export class LoadpointAccessory {
         soc,
         (err as Error).message,
       );
+      throw this.hapError("SERVICE_COMMUNICATION_FAILURE");
     }
   }
 }

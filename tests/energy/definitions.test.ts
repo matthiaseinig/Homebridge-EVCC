@@ -2,10 +2,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  CHARGING_SERVICE_KEYS,
   CHARS,
   CONTROL_ROLES,
-  RETIRED,
   SERVICES,
+  SITE_SERVICE_KEYS,
   UUID_SUFFIX,
   type CharKey,
 } from "../../src/energy/definitions.js";
@@ -34,26 +35,31 @@ export function contractProblems(doc: string): string[] {
 }
 
 describe("energy definitions", () => {
-  const active = [...Object.values(CHARS), ...Object.values(SERVICES)].map((d) => d.uuid as string);
-  const retired = [...Object.keys(RETIRED.services), ...Object.keys(RETIRED.characteristics)];
+  const all = [...Object.values(CHARS), ...Object.values(SERVICES)].map((d) => d.uuid as string);
 
   it("uses well-formed, unique, upper-case UUIDs with the shared suffix", () => {
-    for (const uuid of [...active, ...retired]) {
+    for (const uuid of all) {
       expect(uuid).toMatch(UUID_RE);
       expect(uuid.endsWith(UUID_SUFFIX)).toBe(true);
     }
-    expect(new Set([...active, ...retired]).size).toBe(active.length + retired.length);
-  });
-
-  it("never reuses a retired UUID", () => {
-    expect(active.filter((u) => retired.includes(u))).toEqual([]);
+    expect(new Set(all).size).toBe(all.length);
   });
 
   it("separates characteristic and service UUID prefixes", () => {
     for (const c of Object.values(CHARS)) expect(c.uuid.startsWith("E5C0")).toBe(true);
     for (const s of Object.values(SERVICES)) expect(s.uuid.startsWith("E5C1")).toBe(true);
-    for (const u of Object.keys(RETIRED.services)) expect(u.startsWith("E5C1")).toBe(true);
-    for (const u of Object.keys(RETIRED.characteristics)) expect(u.startsWith("E5C0")).toBe(true);
+  });
+
+  it("assigns every service to exactly one contract section", () => {
+    const sections = [...SITE_SERVICE_KEYS, ...CHARGING_SERVICE_KEYS];
+    expect([...sections].sort()).toEqual(Object.keys(SERVICES).sort());
+  });
+
+  it("makes only Charge Mode and Set Plan writable", () => {
+    const writable = (Object.keys(CHARS) as CharKey[]).filter(
+      (k) => (CHARS[k] as { writable?: boolean }).writable,
+    );
+    expect(writable.sort()).toEqual(["ChargeMode", "SetPlan"]);
   });
 
   it("lists each characteristic at most once per service", () => {
@@ -81,15 +87,15 @@ describe("energy definitions", () => {
 
   it("detects a changed unit in a row", () => {
     const doc = readFileSync(contractPath, "utf-8").replace(
-      `| \`${CHARS.ChargePower.uuid}\` | float | W |`,
-      `| \`${CHARS.ChargePower.uuid}\` | float | kW |`,
+      `| \`${CHARS.ChargePower.uuid}\` | float | read, notify | W |`,
+      `| \`${CHARS.ChargePower.uuid}\` | float | read, notify | kW |`,
     );
     expect(contractProblems(doc).length).toBeGreaterThan(0);
   });
 
   it("detects a stale row for a characteristic that is not defined", () => {
     const stale =
-      "| Grid Power (`GridPower`) | `E5C00012-8B93-4652-90CD-F02EAF5356EA` | float | W | x | x | x | x |";
+      "| Old Thing (`OldThing`) | `E5C000FF-8B93-4652-90CD-F02EAF5356EA` | float | read, notify | W | x | x | x | x |";
     const doc = readFileSync(contractPath, "utf-8") + "\n" + stale + "\n";
     expect(contractProblems(doc)).toEqual([`stale or unexpected row: ${stale}`]);
   });

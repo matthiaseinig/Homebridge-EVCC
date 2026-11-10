@@ -32,7 +32,7 @@ export interface EvccPlatformConfig extends PlatformConfig {
   hideSite?: boolean;
   /** Skip the per-vehicle occupancy sensors. Default false. */
   hideVehiclePresence?: boolean;
-  /** Skip the read-only custom charging services and control tags (docs/zuhause-contract.md). Default false. */
+  /** Skip the custom energy and charging services and control tags (docs/zuhause-contract.md). Default false. */
   hideEnergyCharacteristics?: boolean;
   /** Verbose logging of WS frames and REST traffic. */
   debug?: boolean;
@@ -155,6 +155,8 @@ export class EvccPlatform implements DynamicPlatformPlugin {
     // Site-level keys: re-render the site card on every change. It's cheap.
     if (this.siteAccessory && !update.key.startsWith("loadpoints.")) {
       this.siteAccessory.applyState(state);
+    } else {
+      this.siteAccessory?.touch();
     }
 
     // Per-loadpoint diff: forward only the trailing key segment.

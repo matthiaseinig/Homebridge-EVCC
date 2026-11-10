@@ -8,7 +8,6 @@ import type {
 } from "homebridge";
 import {
   CHARS,
-  RETIRED,
   SERVICES,
   type CharDef,
   type CharKey,
@@ -38,7 +37,9 @@ function toProps(hap: Hap, def: CharDef): CharacteristicProps {
       bool: hap.Formats.BOOL,
       string: hap.Formats.STRING,
     }[def.format],
-    perms: [hap.Perms.PAIRED_READ, hap.Perms.NOTIFY],
+    perms: def.writable
+      ? [hap.Perms.PAIRED_READ, hap.Perms.PAIRED_WRITE, hap.Perms.NOTIFY]
+      : [hap.Perms.PAIRED_READ, hap.Perms.NOTIFY],
   };
   // Only "%" has a HAP unit. Other units (W, kWh, A, ...) are omitted from the
   // HAP metadata on purpose and documented in the contract instead.
@@ -168,14 +169,6 @@ export function removeCustomCharacteristic(svc: Service, key: CharKey): void {
   const uuid = CHARS[key].uuid;
   const existing = svc.characteristics.find((x) => x.UUID === uuid);
   if (existing) svc.removeCharacteristic(existing);
-}
-
-/** Remove services whose type UUID is retired (see RETIRED in definitions.ts). */
-export function pruneRetiredServices(accessory: PlatformAccessory): void {
-  const services = (accessory as PlatformAccessory & { services: Service[] }).services;
-  for (const svc of [...services]) {
-    if (svc.UUID in RETIRED.services) accessory.removeService(svc);
-  }
 }
 
 /** Keep the HAP Name characteristic (and the cached display name) in sync. */

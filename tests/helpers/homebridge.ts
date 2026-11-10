@@ -199,6 +199,20 @@ function buildHapStubs() {
   return { Service, Characteristic };
 }
 
+/** Mirrors HAP-NodeJS's HapStatusError so tests can assert on the status. */
+export class MockHapStatusError extends Error {
+  constructor(public hapStatus: number) {
+    super(`HAP status ${hapStatus}`);
+  }
+}
+
+export const MockHAPStatus = {
+  INSUFFICIENT_PRIVILEGES: -70401,
+  SERVICE_COMMUNICATION_FAILURE: -70402,
+  INVALID_VALUE_IN_REQUEST: -70410,
+  NOT_ALLOWED_IN_CURRENT_STATE: -70412,
+};
+
 const Formats = { FLOAT: "float", UINT32: "uint32", BOOL: "bool", STRING: "string" };
 const Perms = { PAIRED_READ: "pr", PAIRED_WRITE: "pw", NOTIFY: "ev" };
 const Units = { PERCENTAGE: "percentage" };
@@ -222,6 +236,8 @@ export function createMockApi(): MockApi {
       Formats,
       Perms,
       Units,
+      HapStatusError: MockHapStatusError,
+      HAPStatus: MockHAPStatus,
       uuid: { generate: (id: string) => `uuid:${id}` },
       Categories: { OTHER: 1 },
     },

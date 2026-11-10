@@ -166,14 +166,26 @@ class EvccClient extends node_events_1.EventEmitter {
     async setBatteryMode(mode) {
         await this.post(`/api/batterymode/${mode}`);
     }
-    async post(path) {
+    /**
+     * Create a SoC-based charging plan for a vehicle. EVCC keeps SoC plans per
+     * vehicle (loadpoint plans are energy-based and only for vehicles without
+     * SoC). `timestamp` must be RFC 3339.
+     */
+    async setVehiclePlanSoc(vehicleName, soc, timestamp) {
+        await this.post(`/api/vehicles/${encodeURIComponent(vehicleName)}/plan/soc/${Math.round(soc)}/${timestamp}`);
+    }
+    /** Delete the SoC-based charging plan of a vehicle. */
+    async deleteVehiclePlanSoc(vehicleName) {
+        await this.post(`/api/vehicles/${encodeURIComponent(vehicleName)}/plan/soc`, "DELETE");
+    }
+    async post(path, method = "POST") {
         if (!this.cookie && this.password) {
             // Best-effort re-login; if it fails the POST will surface a 401.
             await this.login().catch(() => undefined);
         }
         const url = `${this.baseUrl}${path}`;
         const res = await this.fetchImpl(url, {
-            method: "POST",
+            method,
             headers: this.authHeaders(),
             signal: AbortSignal.timeout(exports.REQUEST_TIMEOUT_MS),
         });
@@ -181,7 +193,7 @@ class EvccClient extends node_events_1.EventEmitter {
             // 401 → cookie likely expired; flush so the next call re-logs in.
             if (res.status === 401)
                 this.cookie = undefined;
-            throw new Error(`POST ${path} HTTP ${res.status}`);
+            throw new Error(`${method} ${path} HTTP ${res.status}`);
         }
     }
     authHeaders() {

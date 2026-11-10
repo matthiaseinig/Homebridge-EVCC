@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LoadpointAccessory = void 0;
 const definitions_js_1 = require("../energy/definitions.js");
+const writeValidation_js_1 = require("../energy/writeValidation.js");
 const hapTypes_js_1 = require("../energy/hapTypes.js");
 const loadpointEnergy_js_1 = require("../energy/loadpointEnergy.js");
 const applyServiceName_js_1 = require("../util/applyServiceName.js");
@@ -58,6 +59,8 @@ class LoadpointAccessory {
     powerService;
     modeSwitches = new Map();
     energy;
+    chargingService;
+    now;
     energyEnabled;
     constructor(deps) {
         this.api = deps.api;
@@ -77,9 +80,15 @@ class LoadpointAccessory {
         if (this.config.modeUi === "switches")
             this.configureModeSwitches();
         this.energyEnabled = this.config.energy ?? true;
-        this.energy = new loadpointEnergy_js_1.LoadpointEnergyService(this.api, this.accessory, deps.now);
-        if (!this.energyEnabled)
+        this.now = deps.now ?? Date.now;
+        this.energy = new loadpointEnergy_js_1.LoadpointEnergyService(this.api, this.accessory, this.now);
+        if (this.energyEnabled) {
+            this.chargingService = this.energy.ensure(this.title());
+            this.configureChargingWrites(this.chargingService);
+        }
+        else {
             this.energy.remove();
+        }
         this.syncControlRoles();
         this.applyState(this.state);
     }
@@ -231,6 +240,7 @@ class LoadpointAccessory {
     /** Tag each control service with its role and whether writes reach EVCC. */
     syncControlRoles() {
         const controls = [
+            [this.chargingService, definitions_js_1.CONTROL_ROLES.charging, this.canWrite()],
             [this.outletService, definitions_js_1.CONTROL_ROLES.outlet, this.canWrite() && this.config.modeUi !== "switches"],
             [this.limitLoadpointService, definitions_js_1.CONTROL_ROLES.limitLoadpoint, this.canWrite()],
             [this.limitVehicleService, definitions_js_1.CONTROL_ROLES.limitVehicle, this.canWrite()],
@@ -260,6 +270,52 @@ class LoadpointAccessory {
         (0, applyServiceName_js_1.applyServiceName)(svc, name, this.api.hap.Characteristic);
         return svc;
     }
+    /** Charge Mode and Set Plan on the Loadpoint Energy service accept writes (validated strictly). */
+    configureChargingWrites(svc) {
+        const types = (0, hapTypes_js_1.energyHapTypes)(this.api.hap);
+        svc.getCharacteristic(types.char("ChargeMode")).onSet(async (value) => {
+            this.requireWritable();
+            const mode = (0, writeValidation_js_1.parseChargeMode)(value);
+            if (!mode)
+                throw this.hapError("INVALID_VALUE_IN_REQUEST");
+            await this.safeSetMode(mode);
+        });
+        svc.getCharacteristic(types.char("SetPlan")).onSet(async (value) => {
+            this.requireWritable();
+            const request = (0, writeValidation_js_1.parsePlanRequest)(value, Math.floor(this.now() / 1000));
+            if (!request)
+                throw this.hapError("INVALID_VALUE_IN_REQUEST");
+            // EVCC keeps SoC plans per vehicle; the plan goes to the vehicle at this loadpoint.
+            const vehicle = this.state.vehicleName;
+            if (!vehicle)
+                throw this.hapError("NOT_ALLOWED_IN_CURRENT_STATE");
+            try {
+                if (request.kind === "clear")
+                    await this.client.deleteVehiclePlanSoc(vehicle);
+                else
+                    await this.client.setVehiclePlanSoc(vehicle, request.soc, (0, writeValidation_js_1.toRfc3339)(request.time));
+            }
+            catch (err) {
+                this.log.warn("Failed to set plan for vehicle %s: %s", vehicle, err.message);
+                throw this.hapError("SERVICE_COMMUNICATION_FAILURE");
+            }
+        });
+    }
+    requireWritable() {
+        if (!this.canWrite())
+            throw this.hapError("INSUFFICIENT_PRIVILEGES");
+    }
+    hapError(status) {
+        const hap = this.api.hap;
+        const code = {
+            SERVICE_COMMUNICATION_FAILURE: -70402 /* hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE */,
+            INVALID_VALUE_IN_REQUEST: -70410 /* hap.HAPStatus.INVALID_VALUE_IN_REQUEST */,
+            NOT_ALLOWED_IN_CURRENT_STATE: -70412 /* hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE */,
+            INSUFFICIENT_PRIVILEGES: -70401 /* hap.HAPStatus.INSUFFICIENT_PRIVILEGES */,
+        }[status];
+        return new this.api.hap.HapStatusError(code);
+    }
+    /** Forward a mode change; an EVCC failure becomes a HAP communication error. */
     async safeSetMode(mode) {
         try {
             // EVCC REST API uses 1-based loadpoint IDs.
@@ -267,6 +323,7 @@ class LoadpointAccessory {
         }
         catch (err) {
             this.log.warn("Failed to set loadpoint %d mode=%s: %s", this.loadpointId + 1, mode, err.message);
+            throw this.hapError("SERVICE_COMMUNICATION_FAILURE");
         }
     }
     async safeSetLoadpointLimit(soc) {
@@ -275,6 +332,7 @@ class LoadpointAccessory {
         }
         catch (err) {
             this.log.warn("Failed to set loadpoint %d limitSoc=%d: %s", this.loadpointId + 1, soc, err.message);
+            throw this.hapError("SERVICE_COMMUNICATION_FAILURE");
         }
     }
     async safeSetVehicleLimit(name, soc) {
@@ -283,6 +341,7 @@ class LoadpointAccessory {
         }
         catch (err) {
             this.log.warn("Failed to set vehicle %s limitSoc=%d: %s", name, soc, err.message);
+            throw this.hapError("SERVICE_COMMUNICATION_FAILURE");
         }
     }
 }

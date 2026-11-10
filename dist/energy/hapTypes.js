@@ -5,7 +5,6 @@ exports.servicesOfType = servicesOfType;
 exports.ensureEnergyService = ensureEnergyService;
 exports.ensureCustomCharacteristic = ensureCustomCharacteristic;
 exports.removeCustomCharacteristic = removeCustomCharacteristic;
-exports.pruneRetiredServices = pruneRetiredServices;
 exports.setServiceName = setServiceName;
 exports.applyValues = applyValues;
 exports.pruneServices = pruneServices;
@@ -21,7 +20,9 @@ function toProps(hap, def) {
             bool: "bool" /* hap.Formats.BOOL */,
             string: "string" /* hap.Formats.STRING */,
         }[def.format],
-        perms: ["pr" /* hap.Perms.PAIRED_READ */, "ev" /* hap.Perms.NOTIFY */],
+        perms: def.writable
+            ? ["pr" /* hap.Perms.PAIRED_READ */, "pw" /* hap.Perms.PAIRED_WRITE */, "ev" /* hap.Perms.NOTIFY */]
+            : ["pr" /* hap.Perms.PAIRED_READ */, "ev" /* hap.Perms.NOTIFY */],
     };
     // Only "%" has a HAP unit. Other units (W, kWh, A, ...) are omitted from the
     // HAP metadata on purpose and documented in the contract instead.
@@ -139,14 +140,6 @@ function removeCustomCharacteristic(svc, key) {
     const existing = svc.characteristics.find((x) => x.UUID === uuid);
     if (existing)
         svc.removeCharacteristic(existing);
-}
-/** Remove services whose type UUID is retired (see RETIRED in definitions.ts). */
-function pruneRetiredServices(accessory) {
-    const services = accessory.services;
-    for (const svc of [...services]) {
-        if (svc.UUID in definitions_js_1.RETIRED.services)
-            accessory.removeService(svc);
-    }
 }
 /** Keep the HAP Name characteristic (and the cached display name) in sync. */
 function setServiceName(hap, svc, name) {

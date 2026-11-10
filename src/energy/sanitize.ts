@@ -42,6 +42,11 @@ export function whToKwh(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value / 1000 : undefined;
 }
 
+/** A 0..1 share to percent; undefined stays undefined. */
+export function shareToPercent(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value * 100 : undefined;
+}
+
 export function num(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }

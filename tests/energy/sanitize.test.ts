@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CHARS } from "../../src/energy/definitions.js";
-import { sanitize, toEpochSeconds, whToKwh } from "../../src/energy/sanitize.js";
+import { sanitize, shareToPercent, toEpochSeconds, whToKwh } from "../../src/energy/sanitize.js";
 
 describe("sanitize", () => {
   it("rounds power to 0.1 W", () => {
@@ -63,6 +63,11 @@ describe("conversions", () => {
     expect(toEpochSeconds(12)).toBe(0);
     expect(toEpochSeconds("not a date")).toBe(0);
     expect(toEpochSeconds("1960-01-01T00:00:00Z")).toBe(0);
+  });
+
+  it("shareToPercent converts 0..1 and passes undefined through", () => {
+    expect(shareToPercent(0.5)).toBe(50);
+    expect(shareToPercent(undefined)).toBeUndefined();
   });
 
   it("whToKwh passes undefined through", () => {

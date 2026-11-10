@@ -101,6 +101,9 @@ class EvccPlatform {
         if (this.siteAccessory && !update.key.startsWith("loadpoints.")) {
             this.siteAccessory.applyState(state);
         }
+        else {
+            this.siteAccessory?.touch();
+        }
         // Per-loadpoint diff: forward only the trailing key segment.
         if (update.key.startsWith("loadpoints.")) {
             for (const idx of touched) {

@@ -326,7 +326,20 @@ describe("EvccPlatform: energy characteristics", () => {
 
     const ws = MockWebSocket.instances[0];
     ws.simulateOpen();
+    const site = service(platform, "site", SERVICES.EnergySite.uuid)!;
+    ws.simulateMessage({
+      grid: { power: 640.04, powers: [200, 220, 220.04], currents: [0.9, 1, 1] },
+      homePower: 1800,
+    });
+    expect(site.getCharacteristic(CHARS.GridPower.uuid).value).toBe(640);
+    expect(site.getCharacteristic(CHARS.GridPowerL3.uuid).value).toBe(220);
+    expect(site.getCharacteristic(CHARS.HomePower.uuid).value).toBe(1800);
+
+    // A loadpoint-only frame moves the site's Last Update too.
+    site.getCharacteristic(CHARS.LastUpdate.uuid).updateValue(0);
     ws.simulateMessage({ "loadpoints.0.chargePower": 0, "loadpoints.0.charging": false });
+    expect(site.getCharacteristic(CHARS.LastUpdate.uuid).value).toBeGreaterThan(0);
+    expect(site.getCharacteristic(CHARS.HomePower.uuid).value).toBe(1800);
     ws.simulateMessage({ statistics: { total: { chargedKWh: 4002 } } });
     expect(lp.getCharacteristic(CHARS.ChargePower.uuid).value).toBe(0);
     expect(lp.getCharacteristic(CHARS.Charging.uuid).value).toBe(false);
@@ -346,6 +359,7 @@ describe("EvccPlatform: energy characteristics", () => {
       expect(platform.accessories.filter((a) => a.context.kind === "loadpoint")).toHaveLength(1),
     );
     expect(service(platform, "site", SERVICES.ChargingStatistics.uuid)).toBeUndefined();
+    expect(service(platform, "site", SERVICES.EnergySite.uuid)).toBeUndefined();
     expect(service(platform, "loadpoint", SERVICES.LoadpointEnergy.uuid)).toBeUndefined();
     expect(service(platform, "site", "LightSensor")).toBeDefined();
   });
