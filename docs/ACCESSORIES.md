@@ -18,16 +18,13 @@ Display name: `siteTitle` from EVCC, falls back to `"EVCC"`.
 
 Hide the entire accessory with `hideSite: true`.
 
-Custom energy services on the site accessory (read-only, for apps; the Home app ignores them; hide them with `hideEnergyCharacteristics: true`):
+Custom services on the site accessory (read-only, for apps; the Home app ignores them; hide them with `hideEnergyCharacteristics: true`):
 
 | Service | Subtype | Content |
 |---|---|---|
-| `Energy Site` | `energy-site` | PV, grid (total, per phase power and current, import and export totals), home, aux, battery (power, SoC, capacity, totals), green shares, tariffs, last update |
-| `PV Array` (one per `pv[]`) | `pv:<meter name>` | meter ID, power, energy total |
-| `Aux Meter` (one per `aux[]`) | `aux:<meter name>` | meter ID, power |
 | `Charging Statistics` (one per `statistics` key) | `stat:<period>` | period, charged energy, solar percentage, average price, average CO2 |
 
-The characteristic list with UUIDs, units, ranges, signs and EVCC source fields is in [zuhause-contract.md](zuhause-contract.md).
+The plugin does not expose site energy as custom characteristics. The characteristic list with UUIDs, units, ranges and EVCC source fields is in [zuhause-contract.md](zuhause-contract.md).
 
 ## Loadpoint accessory (one per EVCC loadpoint)
 
@@ -43,7 +40,7 @@ Display name: `loadpoints[i].title`, falls back to `"Loadpoint <i+1>"`.
 | `LightSensor` | `charge-power` | `CurrentAmbientLightLevel ← chargePower` |
 | `Switch` | `mode-now` / `mode-pv` / `mode-minpv` | (only when `loadpointMode: "switches"`)<br>`On ← mode === <mode>`<br>`onSet`: ON → set to `<mode>`, OFF (when active) → set to `off` |
 
-Custom energy service (read-only, unless `hideEnergyCharacteristics: true`): `Loadpoint Energy`, subtype `loadpoint-energy`, with charge power, mode, connected, charging, limit SoC, vehicle SoC, range, name and title, session and today energy, charge meter total, and the plan time, plan SoC and plan active flag. Details in [zuhause-contract.md](zuhause-contract.md).
+Custom energy service (read-only, unless `hideEnergyCharacteristics: true`): `Loadpoint Energy`, subtype `loadpoint-energy`, with charge power, mode, connected, charging, limit SoC, vehicle SoC, range, name and title, session and today energy, charge meter total, the plan time, plan SoC and plan active flag, and last update. The outlet, charge-limit, vehicle-limit and mode-switch services also carry the read-only `Control Role` and `Control Enabled` characteristics. Details, including the write effects and how EVCC confirms them, in [zuhause-contract.md](zuhause-contract.md).
 
 Loadpoints disappearing from EVCC (e.g. user removed one from the EVCC config) are unregistered automatically on the next state poll.
 
@@ -73,6 +70,6 @@ To switch to read-only after configuring a password, simply remove the password 
 - Charging plans (`/loadpoints/{id}/plan/...`) — better managed through the EVCC UI.
 - Static / repeating SOC plans on vehicles — same reason.
 - Sessions / grid sessions / system logs — these are time-series records, awkward to fit into HAP.
-- Tariff time series and forecasts. The current grid and feed-in prices are available as custom characteristics (see [zuhause-contract.md](zuhause-contract.md)).
+- Tariff data and forecasts.
 
 PRs welcome if you have a concrete automation use case that needs one of these.
