@@ -154,6 +154,30 @@ class EvccClient extends node_events_1.EventEmitter {
         this.dispatch("state", state);
         return state;
     }
+    /**
+     * Read EVCC's own session log (`GET /api/sessions`, read only). Returns the
+     * raw entries; the sessions module normalises them. The admin cookie is
+     * renewed first when a password is configured, because the endpoint needs
+     * a login on EVCC instances that have a password.
+     */
+    async getSessions() {
+        if (this.password && (!this.cookie || Date.now() >= this.cookieRefreshAt)) {
+            await this.login().catch(() => undefined);
+        }
+        const res = await this.fetchImpl(`${this.baseUrl}/api/sessions`, {
+            headers: this.authHeaders(),
+            signal: AbortSignal.timeout(exports.REQUEST_TIMEOUT_MS),
+        });
+        if (!res.ok)
+            throw new Error(`GET /api/sessions HTTP ${res.status}`);
+        const data = (await res.json());
+        const list = data && typeof data === "object" && !Array.isArray(data) && "result" in data
+            ? data.result
+            : data;
+        if (!Array.isArray(list))
+            throw new Error("GET /api/sessions returned no list");
+        return list;
+    }
     async setLoadpointMode(loadpointId, mode) {
         await this.post(`/api/loadpoints/${loadpointId}/mode/${mode}`);
     }

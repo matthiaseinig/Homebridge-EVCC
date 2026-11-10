@@ -13,6 +13,9 @@ import { asLoadpointArray } from "./api/decoders.js";
 import { LoadpointAccessory, type LoadpointModeUi } from "./accessories/loadpointAccessory.js";
 import { SiteAccessory } from "./accessories/siteAccessory.js";
 import { VehiclePresenceAccessory } from "./accessories/vehiclePresenceAccessory.js";
+import { parseSessionsConfig } from "./sessions/config.js";
+import { SessionsService } from "./sessions/service.js";
+import { loadpointSummary } from "./sessions/summary.js";
 import { PLATFORM_NAME, PLUGIN_NAME } from "./settings.js";
 
 export interface EvccPlatformConfig extends PlatformConfig {
@@ -26,20 +29,34 @@ export interface EvccPlatformConfig extends PlatformConfig {
   loadpointMode?: LoadpointModeUi;
   /** ChargeMode used when toggling the on/off Outlet to ON. Default "pv". */
   defaultLoadpointMode?: ChargeMode;
-  /** Also expose the assigned vehicle's limitSoc as a second blinds. Default false. */
+  /** Vehicle limitSoc as a second blinds; needs `limitWindowCovering`. Default false. */
   exposeVehicleLimit?: boolean;
+  /**
+   * Legacy: expose the charge limits as WindowCovering sliders in the Home app.
+   * Default false: Apple Home scenes and "close all blinds" would change the
+   * charge limit (issue #33). Apps use the custom `Charge Limit` characteristic.
+   */
+  limitWindowCovering?: boolean;
   /** Skip the site-wide telemetry accessory. Default false. */
   hideSite?: boolean;
   /** Skip the per-vehicle occupancy sensors. Default false. */
   hideVehiclePresence?: boolean;
-  /** Skip the custom energy and charging services and control tags (docs/zuhause-contract.md). Default false. */
+  /** Skip the custom energy and charging services and control tags (docs/app-contract.md). Default false. */
   hideEnergyCharacteristics?: boolean;
+  /**
+   * Charging session history: `{ enabled, maxSessions, api: { enabled, bindAddress, port, token } }`.
+   * Polls EVCC's session log, keeps it in the Homebridge storage folder and
+   * optionally serves it on the LAN (off by default). See the README.
+   */
+  sessions?: unknown;
   /** Verbose logging of WS frames and REST traffic. */
   debug?: boolean;
 }
 
 export interface EvccPlatformDeps {
   client?: EvccClient;
+  /** Inject the session history service for tests. */
+  sessions?: SessionsService;
 }
 
 const SITE_ACCESSORY_KEY = "evcc-site";
@@ -53,6 +70,7 @@ export class EvccPlatform implements DynamicPlatformPlugin {
 
   private readonly client: EvccClient | null = null;
   private readonly debug: boolean;
+  private readonly sessions: SessionsService | null = null;
 
   // Adopted accessory wrappers, keyed for fast lookup.
   private siteAccessory: SiteAccessory | null = null;
@@ -90,6 +108,9 @@ export class EvccPlatform implements DynamicPlatformPlugin {
         pollIntervalMs: config.pollInterval ? config.pollInterval * 1000 : undefined,
       });
 
+    this.sessions = deps.sessions ?? this.createSessions();
+    this.sessions?.onUpdated(() => this.applySessionSummaries());
+
     this.client.on("state", (state) => this.onState(state));
     this.client.on("update", (update, touched) => this.onUpdate(update, touched));
     this.client.on("connect", () => log.debug("EVCC websocket connected"));
@@ -101,6 +122,21 @@ export class EvccPlatform implements DynamicPlatformPlugin {
       void this.start();
     });
     api.on("shutdown", () => this.stop());
+  }
+
+  /** The session history service, unless it is switched off or there is no storage folder. */
+  private createSessions(): SessionsService | null {
+    const { config, errors } = parseSessionsConfig(this.config.sessions);
+    for (const e of errors) this.log.error(e);
+    const storagePath = (this.api.user as { storagePath?: () => string } | undefined)?.storagePath;
+    if (!config.enabled || typeof storagePath !== "function") return null;
+    return new SessionsService({
+      source: this.client!,
+      log: this.log,
+      dir: storagePath.call(this.api.user),
+      maxSessions: config.maxSessions,
+      api: config.api,
+    });
   }
 
   configureAccessory(accessory: PlatformAccessory): void {
@@ -118,13 +154,14 @@ export class EvccPlatform implements DynamicPlatformPlugin {
         "Failed to reach EVCC: %s. The plugin will keep retrying in the background.",
         (err as Error).message,
       );
-      return;
     }
+    await this.sessions?.start();
   }
 
   private stop(): void {
     if (!this.client) return;
     this.log.info("EVCC platform shutting down.");
+    this.sessions?.stop();
     for (const lp of this.loadpoints.values()) lp.dispose();
     for (const v of this.vehicles.values()) v.dispose();
     this.siteAccessory?.dispose();
@@ -143,6 +180,22 @@ export class EvccPlatform implements DynamicPlatformPlugin {
     this.adoptLoadpoints(state);
     this.adoptVehicles(state);
     this.pruneStale(state);
+    this.sessions?.noteLoadpoints(asLoadpointArray(state.loadpoints));
+    this.applySessionSummaries();
+  }
+
+  /** Render each loadpoint's Charging History from the session store (no network). */
+  private applySessionSummaries(): void {
+    const sessions = this.sessions;
+    if (!sessions) return;
+    const now = Date.now();
+    const updated = sessions.store.lastUpdate === null ? 0 : Math.floor(sessions.store.lastUpdate / 1000);
+    for (const lp of this.loadpoints.values()) {
+      lp.applySessions(
+        loadpointSummary(sessions.store.forLoadpoint(lp.loadpointTitle()), now),
+        updated,
+      );
+    }
   }
 
   private onUpdate(
@@ -150,6 +203,7 @@ export class EvccPlatform implements DynamicPlatformPlugin {
     touched: ReadonlySet<number>,
   ): void {
     if (this.debug) this.log.debug("EVCC update: %s = %j", update.key, update.value);
+    this.sessions?.noteUpdate(update.key, update.value);
     const state = this.client!.getState();
 
     // Site-level keys: re-render the site card on every change. It's cheap.
@@ -271,8 +325,10 @@ export class EvccPlatform implements DynamicPlatformPlugin {
             modeUi: this.config.loadpointMode ?? "outlet",
             defaultMode: this.config.defaultLoadpointMode ?? "pv",
             exposeVehicleLimit: !!this.config.exposeVehicleLimit,
+            limitWindowCovering: this.config.limitWindowCovering === true,
             writable: this.writable,
             energy: !this.config.hideEnergyCharacteristics,
+            sessions: this.sessions !== null,
           },
         }),
       );

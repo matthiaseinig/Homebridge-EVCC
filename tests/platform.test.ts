@@ -29,6 +29,7 @@ interface BuildOpts {
   hideVehiclePresence?: boolean;
   loadpointMode?: "outlet" | "switches" | "readonly";
   exposeVehicleLimit?: boolean;
+  limitWindowCovering?: boolean;
   hideEnergyCharacteristics?: boolean;
   initialState?: Record<string, unknown>;
 }
@@ -64,6 +65,7 @@ function buildPlatform(opts: BuildOpts = {}) {
       hideVehiclePresence: opts.hideVehiclePresence,
       loadpointMode: opts.loadpointMode,
       exposeVehicleLimit: opts.exposeVehicleLimit,
+      limitWindowCovering: opts.limitWindowCovering,
       hideEnergyCharacteristics: opts.hideEnergyCharacteristics,
     },
     api,
@@ -159,6 +161,26 @@ describe("EvccPlatform — adoption", () => {
     expect(kinds).toContain("site");
     expect(kinds).toContain("loadpoint");
     expect(kinds).toContain("vehicle");
+  });
+
+  it("exposes the charge limit as a window covering only with limitWindowCovering (issue #33)", async () => {
+    const coverings = async (limitWindowCovering?: boolean): Promise<number> => {
+      const { api, platform } = buildPlatform({
+        url: "http://evcc.local:7070",
+        hideSite: true,
+        hideVehiclePresence: true,
+        exposeVehicleLimit: true,
+        limitWindowCovering,
+        initialState: { loadpoints: [{ title: "Garage", limitSoc: 80 }] },
+      });
+      api.emit("didFinishLaunching");
+      await vi.waitFor(() => expect(platform.accessories.length).toBe(1));
+      const acc = platform.accessories[0] as unknown as MockPlatformAccessory;
+      return acc.services.filter((s) => s.UUID === "WindowCovering").length;
+    };
+    expect(await coverings(undefined)).toBe(0);
+    expect(await coverings(false)).toBe(0);
+    expect(await coverings(true)).toBe(2);
   });
 
   it("hideSite + hideVehiclePresence skip those adoptions", async () => {

@@ -4,6 +4,7 @@ exports.LoadpointAccessory = void 0;
 const definitions_js_1 = require("../energy/definitions.js");
 const writeValidation_js_1 = require("../energy/writeValidation.js");
 const hapTypes_js_1 = require("../energy/hapTypes.js");
+const chargingHistory_js_1 = require("../energy/chargingHistory.js");
 const loadpointEnergy_js_1 = require("../energy/loadpointEnergy.js");
 const applyServiceName_js_1 = require("../util/applyServiceName.js");
 const powerToLux_js_1 = require("../util/powerToLux.js");
@@ -32,17 +33,23 @@ const MODE_ROLES = {
  *
  *   - AccessoryInformation
  *   - Outlet            "<title>"                   On = enabled, OutletInUse = connected
- *   - WindowCovering    "<title> Charge Limit"      TargetPosition = limitSoc, CurrentPosition = vehicleSoc
- *   - WindowCovering    "<title> Vehicle Limit"     (optional, when exposeVehicleLimit)
+ *   - WindowCovering    "<title> Charge Limit"      legacy, only with limitWindowCovering:
+ *                                                   TargetPosition = limitSoc, CurrentPosition = vehicleSoc
+ *   - WindowCovering    "<title> Vehicle Limit"     legacy, only with limitWindowCovering and exposeVehicleLimit
  *   - BatteryService    "<title> Vehicle"           BatteryLevel = vehicleSoc, ChargingState = charging
  *   - LightSensor       "<title> Power"             CurrentAmbientLightLevel = chargePower (W → lux)
  *   - Switch ×3         "<title> Now"/"PV"/"Min+PV" optional, when modeUi = "switches"
- *   - Custom service    "<title> Energy"            read-only Loadpoint Energy characteristics
+ *   - Custom service    "<title> Energy"            Loadpoint Energy characteristics; Charge Mode,
+ *                                                   Set Plan and Charge Limit accept writes
+ *
+ * The charge limit is not a WindowCovering by default: Apple Home ignores custom
+ * characteristics, so no scene, "close all blinds" request or automation of the
+ * Home app can reach the `Charge Limit` characteristic.
  *
  * Unless energy characteristics are disabled, every control service above
  * also carries the read-only custom Control Role and Control Enabled
  * characteristics so apps can find and steer the controls without relying on
- * service names (docs/zuhause-contract.md).
+ * service names (docs/app-contract.md).
  */
 class LoadpointAccessory {
     api;
@@ -59,6 +66,7 @@ class LoadpointAccessory {
     powerService;
     modeSwitches = new Map();
     energy;
+    history;
     chargingService;
     now;
     energyEnabled;
@@ -72,9 +80,7 @@ class LoadpointAccessory {
         this.config = deps.config;
         this.configureInformation();
         this.configureOutlet();
-        this.configureLimitLoadpoint();
-        if (this.config.exposeVehicleLimit)
-            this.configureLimitVehicle();
+        this.configureLimitCoverings();
         this.configureVehicleBattery();
         this.configurePower();
         if (this.config.modeUi === "switches")
@@ -89,8 +95,21 @@ class LoadpointAccessory {
         else {
             this.energy.remove();
         }
+        this.history = new chargingHistory_js_1.ChargingHistoryService(this.api, this.accessory);
+        if (!this.energyEnabled || !this.config.sessions)
+            this.history.remove();
         this.syncControlRoles();
         this.applyState(this.state);
+    }
+    /** Loadpoint title as EVCC reports it; the session log refers to loadpoints by it. */
+    loadpointTitle() {
+        return this.title();
+    }
+    /** Render the Charging History service; ignored unless history is enabled. */
+    applySessions(summary, updatedSeconds) {
+        if (!this.energyEnabled || !this.config.sessions)
+            return;
+        this.history.apply(this.title(), summary, updatedSeconds);
     }
     /** Re-render every service from a fresh loadpoint state. */
     applyState(state) {
@@ -167,6 +186,33 @@ class LoadpointAccessory {
             });
         }
     }
+    /**
+     * The limit window coverings exist only with the legacy `limitWindowCovering`
+     * option. Without it, coverings restored from the Homebridge cache are removed,
+     * so no scene can reach them.
+     */
+    configureLimitCoverings() {
+        const legacy = this.config.limitWindowCovering === true;
+        if (legacy)
+            this.configureLimitLoadpoint();
+        else
+            this.removeLimitCovering(SUBTYPE_LIMIT_LP);
+        if (legacy && this.config.exposeVehicleLimit) {
+            this.configureLimitVehicle();
+            return;
+        }
+        this.removeLimitCovering(SUBTYPE_LIMIT_VEHICLE);
+        if (this.config.exposeVehicleLimit) {
+            this.log.warn("%s: exposeVehicleLimit needs limitWindowCovering: true; the vehicle limit is not exposed, so scenes cannot change it.", this.title());
+        }
+    }
+    removeLimitCovering(subtype) {
+        const WindowCovering = this.api.hap.Service.WindowCovering;
+        const services = this.accessory.services;
+        const cached = services.find((s) => s.UUID === WindowCovering.UUID && s.subtype === subtype);
+        if (cached)
+            this.accessory.removeService(cached);
+    }
     configureLimitLoadpoint() {
         const Service = this.api.hap.Service;
         const C = this.api.hap.Characteristic;
@@ -241,10 +287,18 @@ class LoadpointAccessory {
     syncControlRoles() {
         const controls = [
             [this.chargingService, definitions_js_1.CONTROL_ROLES.charging, this.canWrite()],
-            [this.outletService, definitions_js_1.CONTROL_ROLES.outlet, this.canWrite() && this.config.modeUi !== "switches"],
+            [
+                this.outletService,
+                definitions_js_1.CONTROL_ROLES.outlet,
+                this.canWrite() && this.config.modeUi !== "switches",
+            ],
             [this.limitLoadpointService, definitions_js_1.CONTROL_ROLES.limitLoadpoint, this.canWrite()],
             [this.limitVehicleService, definitions_js_1.CONTROL_ROLES.limitVehicle, this.canWrite()],
-            ...[...this.modeSwitches].map(([mode, svc]) => [svc, MODE_ROLES[mode], this.canWrite()]),
+            ...[...this.modeSwitches].map(([mode, svc]) => [
+                svc,
+                MODE_ROLES[mode],
+                this.canWrite(),
+            ]),
         ];
         const hap = this.api.hap;
         for (const [svc, role, enabled] of controls) {
@@ -270,9 +324,16 @@ class LoadpointAccessory {
         (0, applyServiceName_js_1.applyServiceName)(svc, name, this.api.hap.Characteristic);
         return svc;
     }
-    /** Charge Mode and Set Plan on the Loadpoint Energy service accept writes (validated strictly). */
+    /** Charge Mode, Set Plan and Charge Limit on the Loadpoint Energy service accept writes (validated strictly). */
     configureChargingWrites(svc) {
         const types = (0, hapTypes_js_1.energyHapTypes)(this.api.hap);
+        svc.getCharacteristic(types.char("ChargeLimit")).onSet(async (value) => {
+            this.requireWritable();
+            const soc = (0, writeValidation_js_1.parseChargeLimit)(value);
+            if (soc === undefined)
+                throw this.hapError("INVALID_VALUE_IN_REQUEST");
+            await this.safeSetLoadpointLimit(soc);
+        });
         svc.getCharacteristic(types.char("ChargeMode")).onSet(async (value) => {
             this.requireWritable();
             const mode = (0, writeValidation_js_1.parseChargeMode)(value);

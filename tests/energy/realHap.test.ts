@@ -93,12 +93,14 @@ describe("custom types on real HAP-NodeJS", () => {
     );
   });
 
-  it("only Charge Mode and Set Plan are writable; everything else is read and notify", () => {
+  it("only Charge Mode, Set Plan and Charge Limit are writable; everything else is read and notify", () => {
     const types = energyHapTypes(hap);
     for (const key of Object.keys(CHARS) as CharKey[]) {
       const c = new (types.char(key))();
       const expected =
-        key === "ChargeMode" || key === "SetPlan" ? ["pr", "pw", "ev"] : ["pr", "ev"];
+        key === "ChargeMode" || key === "SetPlan" || key === "ChargeLimit"
+          ? ["pr", "pw", "ev"]
+          : ["pr", "ev"];
       expect(c.props.perms, key).toEqual(expected);
     }
   });
@@ -166,6 +168,7 @@ describe("custom types on real HAP-NodeJS", () => {
         defaultMode: "pv",
         exposeVehicleLimit: true,
         writable: true,
+        limitWindowCovering: true,
       },
     });
     const role = (svc: Service): unknown =>
@@ -274,5 +277,44 @@ describe("custom types on real HAP-NodeJS", () => {
       hapNodejs.HAPStatus.SERVICE_COMMUNICATION_FAILURE,
     );
     expect(mode.value).toBe("pv");
+  });
+
+  it("issue #33: no window covering by default, cached ones removed, Charge Limit writes reach EVCC", async () => {
+    const acc = newAccessory("limit");
+    // An accessory cached by plugin 1.1.0 carries the old charge-limit window covering.
+    acc.addService(new hap.Service.WindowCovering("Loadpoint A Charge Limit", "limit-loadpoint"));
+    const json = JSON.parse(JSON.stringify(PlatformAccessory.serialize(acc as never)));
+    const restored = PlatformAccessory.deserialize(json) as unknown as PlatformAccessoryType;
+    expect(restored.services.some((s) => s.UUID === hap.Service.WindowCovering.UUID)).toBe(true);
+    const warnings = collectWarnings(restored, true);
+
+    const calls: Array<[number, number]> = [];
+    new LoadpointAccessory({
+      api,
+      log: createMockLogger(),
+      client: {
+        setLoadpointLimitSoc: async (id: number, soc: number) => {
+          calls.push([id, soc]);
+        },
+      } as unknown as EvccClient,
+      accessory: restored,
+      loadpointId: 0,
+      state: energyFixture().loadpoints![0],
+      config: { modeUi: "outlet", defaultMode: "pv", exposeVehicleLimit: true, writable: true },
+    });
+
+    expect(restored.services.some((s) => s.UUID === hap.Service.WindowCovering.UUID)).toBe(false);
+    const svc = find(restored, SERVICES.LoadpointEnergy.uuid, "loadpoint-energy")!;
+    const limit = svc.getCharacteristic(energyHapTypes(hap).char("ChargeLimit"));
+    expect(limit.props.minStep).toBe(1);
+    expect(limit.props.unit).toBe(hap.Units.PERCENTAGE);
+    expect(limit.value).toBe(80);
+    await limit.handleSetRequest(70);
+    expect(calls).toEqual([[1, 70]]);
+    await expect(limit.handleSetRequest(70.5)).rejects.toBe(
+      hapNodejs.HAPStatus.INVALID_VALUE_IN_REQUEST,
+    );
+    expect(calls).toHaveLength(1);
+    expect(warnings).toEqual([]);
   });
 });

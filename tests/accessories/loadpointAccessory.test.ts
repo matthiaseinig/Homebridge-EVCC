@@ -62,13 +62,14 @@ describe("LoadpointAccessory", () => {
     const types = acc.services.map((s) => `${s.UUID}/${s.subtype ?? ""}`);
     expect(types).toContain("AccessoryInformation/");
     expect(types).toContain("Outlet/outlet");
-    expect(types).toContain("WindowCovering/limit-loadpoint");
+    // The charge limit is no WindowCovering by default (issue #33); see chargeLimit.test.ts.
+    expect(types.some((t) => t.startsWith("WindowCovering/"))).toBe(false);
     expect(types).toContain("Battery/vehicle-battery");
     expect(types).toContain("LightSensor/charge-power");
   });
 
-  it("renders the vehicle-limit blinds when configured", () => {
-    const { acc } = build({}, { exposeVehicleLimit: true });
+  it("renders the vehicle-limit blinds when configured with the legacy window covering option", () => {
+    const { acc } = build({}, { exposeVehicleLimit: true, limitWindowCovering: true });
     expect(acc.services.some((s) => s.subtype === "limit-vehicle")).toBe(true);
   });
 
@@ -99,8 +100,8 @@ describe("LoadpointAccessory", () => {
     expect(client.setLoadpointMode).toHaveBeenCalledWith(1, "off");
   });
 
-  it("setting the limit blinds POSTs limitSoc", async () => {
-    const { acc, client } = build({ limitSoc: 80 });
+  it("setting the legacy limit blinds POSTs limitSoc", async () => {
+    const { acc, client } = build({ limitSoc: 80 }, { limitWindowCovering: true });
     const cov = acc.services.find((s) => s.subtype === "limit-loadpoint")!;
     const handler = cov.getCharacteristic("TargetPosition").onSetHandler!;
     await handler(70);
@@ -110,7 +111,7 @@ describe("LoadpointAccessory", () => {
   it("setting the vehicle-limit blinds POSTs vehicle limitSoc", async () => {
     const { acc, client } = build(
       { vehicleName: "vehicle_1" },
-      { exposeVehicleLimit: true },
+      { exposeVehicleLimit: true, limitWindowCovering: true },
     );
     const cov = acc.services.find((s) => s.subtype === "limit-vehicle")!;
     const handler = cov.getCharacteristic("TargetPosition").onSetHandler!;
@@ -119,7 +120,7 @@ describe("LoadpointAccessory", () => {
   });
 
   it("vehicle-limit handler is a no-op when no vehicle is assigned", async () => {
-    const { acc, client } = build({}, { exposeVehicleLimit: true });
+    const { acc, client } = build({}, { exposeVehicleLimit: true, limitWindowCovering: true });
     const cov = acc.services.find((s) => s.subtype === "limit-vehicle")!;
     await cov.getCharacteristic("TargetPosition").onSetHandler!(85);
     expect(client.setVehicleLimitSoc).not.toHaveBeenCalled();
@@ -171,7 +172,7 @@ describe("LoadpointAccessory", () => {
   });
 
   it("logs and returns a HAP communication failure when setLoadpointLimitSoc fails", async () => {
-    const { acc, client, log } = build({ limitSoc: 80 });
+    const { acc, client, log } = build({ limitSoc: 80 }, { limitWindowCovering: true });
     (client.setLoadpointLimitSoc as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error("ouch"),
     );
@@ -188,7 +189,7 @@ describe("LoadpointAccessory", () => {
   it("logs and returns a HAP communication failure when setVehicleLimitSoc fails", async () => {
     const { acc, client, log } = build(
       { vehicleName: "ev1" },
-      { exposeVehicleLimit: true },
+      { exposeVehicleLimit: true, limitWindowCovering: true },
     );
     (client.setVehicleLimitSoc as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error("bad"),
@@ -203,8 +204,8 @@ describe("LoadpointAccessory", () => {
     );
   });
 
-  it("applyState updates outlet, battery, lightsensor characteristics", () => {
-    const { acc, lp } = build({});
+  it("applyState updates outlet, battery, lightsensor and legacy limit characteristics", () => {
+    const { acc, lp } = build({}, { limitWindowCovering: true });
     lp.applyState({
       enabled: true,
       connected: true,
@@ -287,7 +288,10 @@ describe("LoadpointAccessory", () => {
     };
 
     it("tags outlet and limit in outlet mode", () => {
-      const { acc } = build({ title: "Garage" }, { exposeVehicleLimit: true });
+      const { acc } = build(
+        { title: "Garage" },
+        { exposeVehicleLimit: true, limitWindowCovering: true },
+      );
       expect(role(acc, "loadpoint-energy")).toEqual({ role: CONTROL_ROLES.charging, enabled: true });
       expect(role(acc, "outlet")).toEqual({ role: CONTROL_ROLES.outlet, enabled: true });
       expect(role(acc, "limit-loadpoint")).toEqual({
@@ -310,7 +314,7 @@ describe("LoadpointAccessory", () => {
     });
 
     it("reports every control as not enabled without a password", () => {
-      const { acc } = build({ title: "Garage" }, { writable: false });
+      const { acc } = build({ title: "Garage" }, { writable: false, limitWindowCovering: true });
       expect(role(acc, "outlet").enabled).toBe(false);
       expect(role(acc, "limit-loadpoint").enabled).toBe(false);
     });

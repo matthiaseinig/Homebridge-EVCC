@@ -34,6 +34,8 @@ function toProps(hap, def) {
         props.maxValue = def.max;
     if (def.maxLen !== undefined)
         props.maxLen = def.maxLen;
+    if (def.step !== undefined)
+        props.minStep = def.step;
     return props;
 }
 function defaultValue(def) {

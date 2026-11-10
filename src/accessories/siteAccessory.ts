@@ -14,7 +14,7 @@ export interface SiteAccessoryDeps {
   state: EvccState;
   /** Whether write-back to EVCC is allowed. Controls the battery-mode switches. */
   writable: boolean;
-  /** Expose the read-only custom site energy and charging statistics services (docs/zuhause-contract.md). Default true. */
+  /** Expose the read-only custom site energy and charging statistics services (docs/app-contract.md). Default true. */
   energy?: boolean;
   /** Clock for the Last Update characteristic; injectable for tests. */
   now?: () => number;
