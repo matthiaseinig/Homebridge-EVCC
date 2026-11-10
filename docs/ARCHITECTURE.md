@@ -36,6 +36,7 @@ The plugin is a pure client of an existing EVCC instance — it does not spawn o
    - Re-authenticates if the cookie has expired.
    - Issues `POST /api/loadpoints/{id}/...`, `POST /api/vehicles/{name}/...`, or `POST /api/batterymode/{mode}`.
 3. EVCC applies the change; the next websocket frame from EVCC echoes the new state, which closes the loop.
+4. If EVCC rejects the call or cannot be reached, the handler logs the error and throws a `HapStatusError(SERVICE_COMMUNICATION_FAILURE)`, so HomeKit reports the failure (the Home app shows "No Response") and the characteristic keeps its previous value.
 
 ## Authentication
 
@@ -62,7 +63,8 @@ EVCC's read endpoints (state, log areas, etc.) are open. Write endpoints require
 | [`src/energy/extract.ts`](../src/energy/extract.ts) | Pure mapping from the EVCC state tree to characteristic values (unit conversions, fallbacks). |
 | [`src/energy/sanitize.ts`](../src/energy/sanitize.ts) | Rounding, clamping and defaults so HAP never sees an out-of-range value. |
 | [`src/energy/hapTypes.ts`](../src/energy/hapTypes.ts) | Builds the custom HAP classes at runtime and syncs services on (cached) accessories. |
-| [`src/energy/loadpointEnergy.ts`](../src/energy/loadpointEnergy.ts), [`src/energy/chargingStatistics.ts`](../src/energy/chargingStatistics.ts) | Custom Loadpoint Energy service and Charging Statistics services (statistics are removed only after several snapshots without them). |
+| [`src/energy/siteEnergy.ts`](../src/energy/siteEnergy.ts), [`src/energy/loadpointEnergy.ts`](../src/energy/loadpointEnergy.ts), [`src/energy/chargingStatistics.ts`](../src/energy/chargingStatistics.ts), [`src/energy/serviceSet.ts`](../src/energy/serviceSet.ts) | Custom site energy, Loadpoint Energy and Charging Statistics services; repeated services are removed only after several snapshots without them. |
+| [`src/energy/writeValidation.ts`](../src/energy/writeValidation.ts) | Strict validation of `Charge Mode` and `Set Plan` writes. |
 | [`src/util/redact.ts`](../src/util/redact.ts) | Password redaction for log output. |
 | [`src/util/powerToLux.ts`](../src/util/powerToLux.ts) | Maps watts onto HomeKit's `CurrentAmbientLightLevel` characteristic, plus `clampPercent` for SOC values. |
 
@@ -76,7 +78,7 @@ HomeKit doesn't ship a generic numeric-display service. `LightSensor`'s `Current
 
 ## Why custom characteristics for app data?
 
-The `LightSensor` mapping above is a display trick for the Home app: it loses the sign, the unit and anything above 100 000. Apps that read HomeKit directly need the real values, so the plugin also exposes read-only custom charging characteristics with stable UUIDs and documented units, and tags its existing controls with their role ([zuhause-contract.md](zuhause-contract.md)). Site energy is left to dedicated inverter plugins. Standard characteristics are used only where the meaning matches exactly. The Home app ignores custom services, so Home-app users see no change.
+The `LightSensor` mapping above is a display trick for the Home app: it loses the sign, the unit and anything above 100 000. Apps that read HomeKit directly need the real values, so the plugin also exposes custom energy and charging characteristics with stable UUIDs, documented units and EVCC's sign conventions, and tags its controls with their role ([zuhause-contract.md](zuhause-contract.md)). Standard characteristics are used only where the meaning matches exactly. The Home app ignores custom services, so Home-app users see no change.
 
 ## Coverage targets
 
