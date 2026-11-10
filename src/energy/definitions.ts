@@ -430,6 +430,53 @@ export const CHARS = {
     sign: ">= 0",
   },
 
+  // Charging: Charging History (summaries of EVCC's session log, kept by the plugin).
+  ChargedToday: {
+    uuid: charUuid("0080"),
+    name: "Charged Today",
+    ...ENERGY,
+    source:
+      "session log: sum of `chargedEnergy` of this loadpoint's sessions that started since local midnight",
+    sign: ">= 0",
+  },
+  ChargedMonth: {
+    uuid: charUuid("0081"),
+    name: "Charged This Month",
+    ...ENERGY,
+    source:
+      "session log: sum of `chargedEnergy` of this loadpoint's sessions that started in the current local month",
+    sign: ">= 0",
+  },
+  SolarShareMonth: {
+    uuid: charUuid("0082"),
+    name: "Solar Share This Month",
+    ...PERCENT,
+    source:
+      "session log: energy weighted mean of `solarPercentage` over this month's sessions of this loadpoint",
+    sign: "0 when nothing was charged this month",
+  },
+  LastSessionEnergy: {
+    uuid: charUuid("0083"),
+    name: "Last Session Energy",
+    ...ENERGY,
+    source: "session log: `chargedEnergy` of the most recently finished session of this loadpoint",
+    sign: ">= 0",
+  },
+  LastSessionEnd: {
+    uuid: charUuid("0084"),
+    name: "Last Session End",
+    ...TIMESTAMP,
+    source: "session log: `finished` of the most recently finished session of this loadpoint",
+    sign: "0 = no finished session yet",
+  },
+  SessionsUpdated: {
+    uuid: charUuid("0085"),
+    name: "Sessions Updated",
+    ...TIMESTAMP,
+    source: "plugin clock when the session log was last fetched from EVCC successfully",
+    sign: "0 = not fetched yet",
+  },
+
   // Charging: tags on control services so apps can identify them without
   // relying on service names.
   ControlRole: {
@@ -526,6 +573,18 @@ export const SERVICES = {
     name: "Charging Statistics",
     chars: ["StatPeriod", "StatChargedEnergy", "StatSolarPercentage", "StatAvgPrice", "StatAvgCo2"],
   },
+  ChargingHistory: {
+    uuid: serviceUuid("0006"),
+    name: "Charging History",
+    chars: [
+      "ChargedToday",
+      "ChargedMonth",
+      "SolarShareMonth",
+      "LastSessionEnergy",
+      "LastSessionEnd",
+      "SessionsUpdated",
+    ],
+  },
 } as const satisfies Record<string, ServiceDef>;
 
 export type ServiceKey = keyof typeof SERVICES;
@@ -533,7 +592,11 @@ export type ServiceKey = keyof typeof SERVICES;
 /** Services that carry site energy (documented in the contract's site section). */
 export const SITE_SERVICE_KEYS = ["EnergySite", "PvArray", "AuxMeter"] as const;
 /** Services that carry charging data (documented in the contract's charging section). */
-export const CHARGING_SERVICE_KEYS = ["LoadpointEnergy", "ChargingStatistics"] as const;
+export const CHARGING_SERVICE_KEYS = [
+  "LoadpointEnergy",
+  "ChargingStatistics",
+  "ChargingHistory",
+] as const;
 
 /** Values of the Control Role characteristic, one per control service. */
 export const CONTROL_ROLES = {

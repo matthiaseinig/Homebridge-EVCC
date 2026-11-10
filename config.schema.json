@@ -84,6 +84,68 @@
         "default": false,
         "description": "Suppress the per-vehicle OccupancySensor accessories. Useful if you only have one car and don't need a dedicated 'is plugged in' sensor."
       },
+      "sessions": {
+        "title": "Charging history",
+        "type": "object",
+        "description": "Keeps a copy of EVCC's session log and shows summaries per loadpoint. The optional LAN API is off by default.",
+        "properties": {
+          "enabled": {
+            "title": "Keep the charging history",
+            "type": "boolean",
+            "default": true,
+            "description": "Poll EVCC's session log every 10 minutes and show the Charging History service on each loadpoint."
+          },
+          "maxSessions": {
+            "title": "Maximum stored sessions",
+            "type": "integer",
+            "default": 5000,
+            "minimum": 100,
+            "maximum": 50000,
+            "description": "The oldest sessions are dropped beyond this number."
+          },
+          "api": {
+            "title": "LAN API",
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "title": "Enable the read-only LAN API",
+                "type": "boolean",
+                "default": false,
+                "description": "Serves the session list and totals to apps on your home network. Needs a bind address."
+              },
+              "bindAddress": {
+                "title": "Bind address",
+                "type": "string",
+                "placeholder": "192.168.1.10",
+                "description": "Literal private or loopback IP address of this Homebridge host. 0.0.0.0 and host names are not accepted.",
+                "condition": {
+                  "functionBody": "return model.sessions && model.sessions.api && model.sessions.api.enabled === true;"
+                }
+              },
+              "port": {
+                "title": "Port",
+                "type": "integer",
+                "default": 8768,
+                "minimum": 1024,
+                "maximum": 65535,
+                "description": "Port of the LAN API.",
+                "condition": {
+                  "functionBody": "return model.sessions && model.sessions.api && model.sessions.api.enabled === true;"
+                }
+              },
+              "token": {
+                "title": "Bearer token (optional)",
+                "type": "string",
+                "format": "password",
+                "description": "At least 16 characters. Leave empty to generate one into the file evcc-sessions-token in the Homebridge storage folder.",
+                "condition": {
+                  "functionBody": "return model.sessions && model.sessions.api && model.sessions.api.enabled === true;"
+                }
+              }
+            }
+          }
+        }
+      },
       "debug": {
         "title": "Verbose logging",
         "type": "boolean",

@@ -26,19 +26,19 @@ Zuhause reads site energy from the Fronius plugin first and uses this plugin's s
 - **Timestamps** are `uint32` seconds since 1970-01-01 UTC; `0` means "none".
 - **Update rate.** The plugin applies EVCC's websocket frames as they arrive (EVCC publishes once per control cycle, set by EVCC's `interval`) and polls `GET /api/state` every `pollInterval` seconds (default 30) as a safety net. HAP sends a notification only when the rounded value changes.
 - **Repeated services** (PV Array, Aux Meter, Charging Statistics) are keyed by an EVCC name, never by an array position, so reordering the EVCC configuration does not move a service to another meter. A service whose entry is missing from EVCC is kept until the entry has been missing from 3 consecutive REST snapshots; websocket frames never remove a service.
-- **Opt-out.** The plugin option `hideEnergyCharacteristics: true` (default `false`) removes all custom services and the control tags.
+- **Opt-out.** The plugin option `hideEnergyCharacteristics: true` (default `false`) removes all custom services and the control tags. `sessions.enabled: false` removes only `Charging History` and stops the session log.
 
 ## Where to find things
 
 | Accessory | How to recognise it | Custom content |
 |---|---|---|
 | Site (one per EVCC instance) | `AccessoryInformation`: Manufacturer `EVCC`, Model `Site`, SerialNumber `evcc-site` | site energy: one `Energy Site`, one `PV Array` per `pv[]` meter, one `Aux Meter` per `aux[]` meter; charging: one `Charging Statistics` per key of `statistics` |
-| Loadpoint (one per EVCC loadpoint) | `AccessoryInformation`: Manufacturer `EVCC`, Model `Loadpoint`, SerialNumber `lp-<index>` (0-based) | one `Loadpoint Energy`; control tags on it and on the standard control services |
+| Loadpoint (one per EVCC loadpoint) | `AccessoryInformation`: Manufacturer `EVCC`, Model `Loadpoint`, SerialNumber `lp-<index>` (0-based) | one `Loadpoint Energy`; one `Charging History` (unless `sessions.enabled` is `false`); control tags on it and on the standard control services |
 | Vehicle (one per EVCC vehicle) | `AccessoryInformation`: Manufacturer `EVCC`, Model `Vehicle`, SerialNumber `<vehicle name>` | none; standard `OccupancySensor` (vehicle connected at any loadpoint), useful as a car fallback |
 
 The site accessory is absent with the plugin option `hideSite`, the vehicle accessories with `hideVehiclePresence`.
 
-iOS does not expose HAP service subtypes, so services of the same type are told apart by characteristics: `PV Array` and `Aux Meter` by `Meter ID`; `Charging Statistics` by `Statistics Period`; control services by `Control Role`. Every custom service also carries the standard `Name` characteristic (`Energy Site`, the meter title, `<loadpoint title> Energy`, `Charging Statistics <period>`).
+iOS does not expose HAP service subtypes, so services of the same type are told apart by characteristics: `PV Array` and `Aux Meter` by `Meter ID`; `Charging Statistics` by `Statistics Period`; `Charging History` by being the only one on its loadpoint accessory; control services by `Control Role`. Every custom service also carries the standard `Name` characteristic (`Energy Site`, the meter title, `<loadpoint title> Energy`, `Charging Statistics <period>`).
 
 ## Services
 
@@ -49,6 +49,7 @@ iOS does not expose HAP service subtypes, so services of the same type are told 
 | Aux Meter (`AuxMeter`) | `E5C10003-8B93-4652-90CD-F02EAF5356EA` | site energy |
 | Loadpoint Energy (`LoadpointEnergy`) | `E5C10004-8B93-4652-90CD-F02EAF5356EA` | charging |
 | Charging Statistics (`ChargingStatistics`) | `E5C10005-8B93-4652-90CD-F02EAF5356EA` | charging |
+| Charging History (`ChargingHistory`) | `E5C10006-8B93-4652-90CD-F02EAF5356EA` | charging |
 
 ## Site energy
 
@@ -142,6 +143,19 @@ Charging data and the charging controls. `Loadpoint Last Update` changes wheneve
 | Average Price (`StatAvgPrice`) | `E5C00063-8B93-4652-90CD-F02EAF5356EA` | float | read, notify | currency/kWh | -1 000 .. 1 000 | 0.0001 | configured currency | `statistics.<period>.avgPrice` |
 | Average CO2 (`StatAvgCo2`) | `E5C00064-8B93-4652-90CD-F02EAF5356EA` | float | read, notify | g/kWh | 0 .. 100 000 | 0.1 | >= 0 | `statistics.<period>.avgCo2` |
 
+### Charging History (`ChargingHistory`)
+
+| Characteristic | UUID | Format | Access | Unit | Range | Resolution | Sign or domain | EVCC source |
+|---|---|---|---|---|---|---|---|---|
+| Charged Today (`ChargedToday`) | `E5C00080-8B93-4652-90CD-F02EAF5356EA` | float | read, notify | kWh | 0 .. 1 000 000 000 | 0.001 | >= 0 | session log: sum of `chargedEnergy` of this loadpoint's sessions that started since local midnight |
+| Charged This Month (`ChargedMonth`) | `E5C00081-8B93-4652-90CD-F02EAF5356EA` | float | read, notify | kWh | 0 .. 1 000 000 000 | 0.001 | >= 0 | session log: sum of `chargedEnergy` of this loadpoint's sessions that started in the current local month |
+| Solar Share This Month (`SolarShareMonth`) | `E5C00082-8B93-4652-90CD-F02EAF5356EA` | float | read, notify | % | 0 .. 100 | 0.1 | 0 when nothing was charged this month | session log: energy weighted mean of `solarPercentage` over this month's sessions of this loadpoint |
+| Last Session Energy (`LastSessionEnergy`) | `E5C00083-8B93-4652-90CD-F02EAF5356EA` | float | read, notify | kWh | 0 .. 1 000 000 000 | 0.001 | >= 0 | session log: `chargedEnergy` of the most recently finished session of this loadpoint |
+| Last Session End (`LastSessionEnd`) | `E5C00084-8B93-4652-90CD-F02EAF5356EA` | uint32 | read, notify | s since 1970-01-01 UTC | 0 .. 4 294 967 295 | 1 | 0 = no finished session yet | session log: `finished` of the most recently finished session of this loadpoint |
+| Sessions Updated (`SessionsUpdated`) | `E5C00085-8B93-4652-90CD-F02EAF5356EA` | uint32 | read, notify | s since 1970-01-01 UTC | 0 .. 4 294 967 295 | 1 | 0 = not fetched yet | plugin clock when the session log was last fetched from EVCC successfully |
+
+Summaries of EVCC's own session log (`GET /api/sessions`), which the plugin polls every 10 minutes and once shortly after a loadpoint stops charging or is unplugged. They belong to the loadpoint named in the session (the loadpoint `title`). A session counts for the day or month in which it started, in the local time of the Homebridge host. The service is present on a loadpoint accessory unless `hideEnergyCharacteristics` or `sessions.enabled: false` is set. Values read 0 until the first fetch succeeds; `Sessions Updated` tells how fresh they are. The full per-session list is available on the optional LAN API, see [Sessions LAN API](#sessions-lan-api).
+
 ### Control tags
 
 | Characteristic | UUID | Format | Access | Unit | Range | Resolution | Sign or domain | EVCC source |
@@ -179,6 +193,28 @@ The communication failure applies to every write path of the plugin (outlet, mod
 **Recommended configuration for app steering:** admin password set. `Charge Mode` and `Set Plan` work with any `loadpointMode` except `readonly`.
 
 **Not available.** Energy-based plans (EVCC's `plan/energy`, for vehicles without SoC) and repeating plans cannot be set; set them in EVCC. `Set Plan` reads the effective plan, which can be a repeating plan; writing it creates a one-off plan. The vehicle limit has no read-back. The site's battery-mode switches control the home battery through EVCC and are not charging controls.
+
+## Sessions LAN API
+
+Optional, read-only, off by default. It serves the plugin's copy of EVCC's session log to apps on the home network; HomeKit cannot carry a long list. It uses the same security model as the Fronius plugin's history API:
+
+- Enabled with `sessions.api.enabled: true`. It binds to the one literal private or loopback IP address given in `sessions.api.bindAddress` (never `0.0.0.0`, never a host name); an invalid address switches the API off and logs an error.
+- Default port `8768` (`sessions.api.port`, 1024 .. 65535).
+- Every request needs `Authorization: Bearer <token>`. The token is `sessions.api.token` when set (at least 16 characters), otherwise a random 64 character token that the plugin generates once into the file `evcc-sessions-token` in the Homebridge storage folder (mode 0600).
+- `GET` only (other methods: 405), no redirects, `Cache-Control: no-store`. Requests from a non-private peer get 403; a `Host` header other than `<bindAddress>:<port>` gets 421 (DNS rebinding protection); a missing or wrong token gets 401.
+- Data file: `evcc-sessions.json` in the storage folder (mode 0600, atomic writes, bounded by `sessions.maxSessions`, default 5000, oldest dropped first).
+
+| Request | Answer |
+|---|---|
+| `GET /v1/status` | `{ schema, sessions, currency, oldest, newest, lastUpdate, lastError, units }`; `oldest`, `newest` and `lastUpdate` are ISO times or null |
+| `GET /v1/sessions?from&to&limit&cursor` | `{ currency, sessions: [...], next }`, oldest first. `from` and `to` are `YYYY-MM-DD` (local days, both ends included) or ISO times (`from` included, `to` excluded) and apply to the start time. `limit` 1 .. 1000 (default 200). `next` is a cursor for the next page (pass it as `cursor`), null on the last page |
+| `GET /v1/sessions/summary?period=month\|year&from&to` | `{ period, currency, buckets: [...] }`, oldest bucket first, in local time |
+
+A session: `id`, `created` (ISO), `finished` (ISO or null while running), `loadpoint`, `vehicle`, `chargedKWh`, `solarPercentage` (0 .. 100), `price` (total, currency of `currency`, null when EVCC has no price), `pricePerKWh`, `co2PerKWh` (g/kWh, null when unknown), `chargeDurationSeconds`, `odometer` (km, null when unknown).
+
+A summary bucket: `period` (`YYYY-MM` or `YYYY`), `sessions`, `chargedKWh`, `solarPercentage` (energy weighted), `cost` (sum of the known prices, null when none), `avgPricePerKWh` (null when none), `chargeDurationSeconds`.
+
+Errors are `{ "error": "..." }` with 400 (bad `from`, `to`, `limit`, `cursor` or `period`), 404 (unknown path), 401, 403, 405 or 421. The plugin never writes to EVCC; it only reads `GET /api/sessions`.
 
 ## Notes for consumers
 

@@ -4,6 +4,7 @@ exports.LoadpointAccessory = void 0;
 const definitions_js_1 = require("../energy/definitions.js");
 const writeValidation_js_1 = require("../energy/writeValidation.js");
 const hapTypes_js_1 = require("../energy/hapTypes.js");
+const chargingHistory_js_1 = require("../energy/chargingHistory.js");
 const loadpointEnergy_js_1 = require("../energy/loadpointEnergy.js");
 const applyServiceName_js_1 = require("../util/applyServiceName.js");
 const powerToLux_js_1 = require("../util/powerToLux.js");
@@ -59,6 +60,7 @@ class LoadpointAccessory {
     powerService;
     modeSwitches = new Map();
     energy;
+    history;
     chargingService;
     now;
     energyEnabled;
@@ -89,8 +91,21 @@ class LoadpointAccessory {
         else {
             this.energy.remove();
         }
+        this.history = new chargingHistory_js_1.ChargingHistoryService(this.api, this.accessory);
+        if (!this.energyEnabled || !this.config.sessions)
+            this.history.remove();
         this.syncControlRoles();
         this.applyState(this.state);
+    }
+    /** Loadpoint title as EVCC reports it; the session log refers to loadpoints by it. */
+    loadpointTitle() {
+        return this.title();
+    }
+    /** Render the Charging History service; ignored unless history is enabled. */
+    applySessions(summary, updatedSeconds) {
+        if (!this.energyEnabled || !this.config.sessions)
+            return;
+        this.history.apply(this.title(), summary, updatedSeconds);
     }
     /** Re-render every service from a fresh loadpoint state. */
     applyState(state) {

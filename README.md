@@ -24,6 +24,7 @@ It exposes everything EVCC knows about your home as native HomeKit accessories: 
 - **Site telemetry accessory** — home-battery SOC, PV production, grid import/export, and home consumption, all as `LightSensor` services (lux ≈ watts; the customary HomeKit "any number" mapping).
 - **Optional mode switches** — flip the loadpoint UI to 3 mutually-exclusive switches (Now / PV / Min+PV) instead of the single on/off outlet.
 - **Energy and charging characteristics for apps** (on by default): custom HomeKit services with site energy (PV total and per array, grid power per phase, signed, home, aux and battery power, battery SoC, meter totals, tariffs) and charging (per loadpoint charge power, mode, session and today energy, vehicle SoC and range, planned departure, plus EVCC's charging statistics). `Charge Mode` and `Set Plan` accept writes, so apps can switch the mode and set or clear a departure plan; the existing controls carry read-only role tags. The Apple Home app ignores these custom services; apps that read HomeKit directly (such as the Zuhause iOS app) get exact values, units and signs. Everything is documented in [docs/zuhause-contract.md](docs/zuhause-contract.md).
+- **Charging history** (on by default): the plugin polls EVCC's own session log (`GET /api/sessions`) every 10 minutes, and once shortly after a loadpoint stops charging or is unplugged, and keeps a bounded copy in the Homebridge storage folder. A `Charging History` service on each loadpoint shows charged kWh today and this month, the solar share this month and the last session (kWh and end time). An optional read-only LAN API (off by default) serves the full session list and monthly or yearly totals. See [Charging history](#charging-history).
 - **Write errors are reported.** When EVCC rejects a write or cannot be reached, the plugin returns a HomeKit error, so the Home app shows "No Response" on the tile instead of pretending the change worked.
 - **Optional battery-mode switches** — Normal / Hold / Charge for your home battery, when an admin password is configured.
 
@@ -80,6 +81,7 @@ sudo npm install -g homebridge-evcc
 | `hideSite` | boolean | no | Suppress the site-wide telemetry accessory. Default `false`. |
 | `hideVehiclePresence` | boolean | no | Suppress per-vehicle presence sensors. Default `false`. |
 | `hideEnergyCharacteristics` | boolean | no | Suppress the custom energy and charging services and the control tags (see [docs/zuhause-contract.md](docs/zuhause-contract.md)). Default `false`. |
+| `sessions` | object | no | Charging history, see [Charging history](#charging-history). |
 | `debug` | boolean | no | Verbose logging of WS frames and REST traffic. |
 
 Example `config.json` block:
@@ -97,6 +99,28 @@ Example `config.json` block:
       "exposeVehicleLimit": true
     }
   ]
+}
+```
+
+## Charging history
+
+The plugin reads EVCC's session log (`GET /api/sessions`, read only; it never writes to EVCC), keeps a copy in the Homebridge storage folder (`evcc-sessions.json`, mode 0600, at most `maxSessions` sessions) and shows summaries per loadpoint through the custom `Charging History` service (`E5C10006-8B93-4652-90CD-F02EAF5356EA`, characteristics `E5C00080` to `E5C00085`, see [docs/zuhause-contract.md](docs/zuhause-contract.md)).
+
+| `sessions` field | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | boolean | `true` | Poll and keep the session log and show the `Charging History` service. |
+| `maxSessions` | integer | `5000` | Oldest sessions are dropped beyond this many (100 to 50000). |
+| `api.enabled` | boolean | `false` | Serve the read-only LAN API. |
+| `api.bindAddress` | string | none | Literal private or loopback IP address to bind (for example the Homebridge host's LAN address). Required for the API; `0.0.0.0` and host names are rejected. |
+| `api.port` | integer | `8768` | Port of the API. |
+| `api.token` | string | generated | Bearer token (at least 16 characters). When empty, a token is generated once into `evcc-sessions-token` in the storage folder (mode 0600). |
+
+The API answers `GET /v1/status`, `GET /v1/sessions?from&to&limit&cursor` and `GET /v1/sessions/summary?period=month|year`, only for private peers, only with `Host: <bindAddress>:<port>` and `Authorization: Bearer <token>`. Details are in the [contract](docs/zuhause-contract.md#sessions-lan-api).
+
+```json
+"sessions": {
+  "enabled": true,
+  "api": { "enabled": true, "bindAddress": "192.168.1.10", "port": 8768 }
 }
 ```
 

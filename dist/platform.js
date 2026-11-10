@@ -6,6 +6,9 @@ const decoders_js_1 = require("./api/decoders.js");
 const loadpointAccessory_js_1 = require("./accessories/loadpointAccessory.js");
 const siteAccessory_js_1 = require("./accessories/siteAccessory.js");
 const vehiclePresenceAccessory_js_1 = require("./accessories/vehiclePresenceAccessory.js");
+const config_js_1 = require("./sessions/config.js");
+const service_js_1 = require("./sessions/service.js");
+const summary_js_1 = require("./sessions/summary.js");
 const settings_js_1 = require("./settings.js");
 const SITE_ACCESSORY_KEY = "evcc-site";
 const LOADPOINT_KEY = (i) => `evcc-loadpoint-${i}`;
@@ -19,6 +22,7 @@ class EvccPlatform {
     accessories = [];
     client = null;
     debug;
+    sessions = null;
     // Adopted accessory wrappers, keyed for fast lookup.
     siteAccessory = null;
     loadpoints = new Map();
@@ -45,6 +49,8 @@ class EvccPlatform {
                     log,
                     pollIntervalMs: config.pollInterval ? config.pollInterval * 1000 : undefined,
                 });
+        this.sessions = deps.sessions ?? this.createSessions();
+        this.sessions?.onUpdated(() => this.applySessionSummaries());
         this.client.on("state", (state) => this.onState(state));
         this.client.on("update", (update, touched) => this.onUpdate(update, touched));
         this.client.on("connect", () => log.debug("EVCC websocket connected"));
@@ -53,6 +59,22 @@ class EvccPlatform {
             void this.start();
         });
         api.on("shutdown", () => this.stop());
+    }
+    /** The session history service, unless it is switched off or there is no storage folder. */
+    createSessions() {
+        const { config, errors } = (0, config_js_1.parseSessionsConfig)(this.config.sessions);
+        for (const e of errors)
+            this.log.error(e);
+        const storagePath = this.api.user?.storagePath;
+        if (!config.enabled || typeof storagePath !== "function")
+            return null;
+        return new service_js_1.SessionsService({
+            source: this.client,
+            log: this.log,
+            dir: storagePath.call(this.api.user),
+            maxSessions: config.maxSessions,
+            api: config.api,
+        });
     }
     configureAccessory(accessory) {
         this.log.debug("Restoring cached accessory: %s", accessory.displayName);
@@ -67,13 +89,14 @@ class EvccPlatform {
         }
         catch (err) {
             this.log.error("Failed to reach EVCC: %s. The plugin will keep retrying in the background.", err.message);
-            return;
         }
+        await this.sessions?.start();
     }
     stop() {
         if (!this.client)
             return;
         this.log.info("EVCC platform shutting down.");
+        this.sessions?.stop();
         for (const lp of this.loadpoints.values())
             lp.dispose();
         for (const v of this.vehicles.values())
@@ -92,10 +115,24 @@ class EvccPlatform {
         this.adoptLoadpoints(state);
         this.adoptVehicles(state);
         this.pruneStale(state);
+        this.sessions?.noteLoadpoints((0, decoders_js_1.asLoadpointArray)(state.loadpoints));
+        this.applySessionSummaries();
+    }
+    /** Render each loadpoint's Charging History from the session store (no network). */
+    applySessionSummaries() {
+        const sessions = this.sessions;
+        if (!sessions)
+            return;
+        const now = Date.now();
+        const updated = sessions.store.lastUpdate === null ? 0 : Math.floor(sessions.store.lastUpdate / 1000);
+        for (const lp of this.loadpoints.values()) {
+            lp.applySessions((0, summary_js_1.loadpointSummary)(sessions.store.forLoadpoint(lp.loadpointTitle()), now), updated);
+        }
     }
     onUpdate(update, touched) {
         if (this.debug)
             this.log.debug("EVCC update: %s = %j", update.key, update.value);
+        this.sessions?.noteUpdate(update.key, update.value);
         const state = this.client.getState();
         // Site-level keys: re-render the site card on every change. It's cheap.
         if (this.siteAccessory && !update.key.startsWith("loadpoints.")) {
@@ -213,6 +250,7 @@ class EvccPlatform {
                     exposeVehicleLimit: !!this.config.exposeVehicleLimit,
                     writable: this.writable,
                     energy: !this.config.hideEnergyCharacteristics,
+                    sessions: this.sessions !== null,
                 },
             }));
         }

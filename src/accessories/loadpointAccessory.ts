@@ -8,7 +8,9 @@ import {
   ensureCustomCharacteristic,
   removeCustomCharacteristic,
 } from "../energy/hapTypes.js";
+import { ChargingHistoryService } from "../energy/chargingHistory.js";
 import { LoadpointEnergyService } from "../energy/loadpointEnergy.js";
+import type { LoadpointSummary } from "../sessions/summary.js";
 import { applyServiceName } from "../util/applyServiceName.js";
 import { clampPercent, powerToLux } from "../util/powerToLux.js";
 
@@ -25,6 +27,8 @@ export interface LoadpointAccessoryConfig {
   writable: boolean;
   /** Expose the read-only custom Loadpoint Energy service (docs/zuhause-contract.md). Default true. */
   energy?: boolean;
+  /** Expose the Charging History service (needs `energy`). Default false. */
+  sessions?: boolean;
 }
 
 export interface LoadpointAccessoryDeps {
@@ -96,6 +100,7 @@ export class LoadpointAccessory {
   private powerService?: Service;
   private readonly modeSwitches = new Map<ChargeMode, Service>();
   private readonly energy: LoadpointEnergyService;
+  private readonly history: ChargingHistoryService;
   private chargingService?: Service;
   private readonly now: () => number;
   private readonly energyEnabled: boolean;
@@ -126,9 +131,22 @@ export class LoadpointAccessory {
     } else {
       this.energy.remove();
     }
+    this.history = new ChargingHistoryService(this.api, this.accessory);
+    if (!this.energyEnabled || !this.config.sessions) this.history.remove();
     this.syncControlRoles();
 
     this.applyState(this.state);
+  }
+
+  /** Loadpoint title as EVCC reports it; the session log refers to loadpoints by it. */
+  loadpointTitle(): string {
+    return this.title();
+  }
+
+  /** Render the Charging History service; ignored unless history is enabled. */
+  applySessions(summary: LoadpointSummary, updatedSeconds: number): void {
+    if (!this.energyEnabled || !this.config.sessions) return;
+    this.history.apply(this.title(), summary, updatedSeconds);
   }
 
   /** Re-render every service from a fresh loadpoint state. */

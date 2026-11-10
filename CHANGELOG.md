@@ -8,6 +8,22 @@ Version bumps and entries below are managed by
 [release-please](https://github.com/googleapis/release-please) on every push to
 `main`.
 
+## [1.1.0] - 2026-11-10
+
+### Added
+- Charging history: the plugin polls EVCC's session log (`GET /api/sessions`,
+  read only) every 10 minutes and once after a loadpoint stops charging or is
+  unplugged, and stores a bounded copy in the Homebridge storage folder
+  (`evcc-sessions.json`, 0600, atomic writes).
+- `Charging History` HomeKit service on each loadpoint (`E5C10006-...`) with
+  charged kWh today and this month, solar share this month, and the last
+  session's kWh and end time (characteristics `E5C00080` to `E5C00085`).
+- Optional read-only LAN API for the session log (`/v1/status`,
+  `/v1/sessions`, `/v1/sessions/summary`), off by default, private bind
+  address, Host check, mandatory bearer token (generated into the storage
+  folder when not configured). Default port 8768.
+- `sessions` config block (`enabled`, `maxSessions`, `api`).
+
 ## [1.0.1] - 2026-05-05
 
 ### Added
