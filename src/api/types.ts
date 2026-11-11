@@ -7,11 +7,22 @@
  */
 
 /**
- * Charge modes of EVCC (api/chargemodestatus.go). `smart` is the current
- * solar-aware mode; `pv` and `minpv` are deprecated upstream (EVCC accepts them
- * on input and normalizes them to `smart`) but are still accepted here.
+ * Charge modes of EVCC (api/chargemodestatus.go). EVCC 0.319 uses `off`,
+ * `smart` and `now`; `pv` and `minpv` are deprecated upstream (EVCC accepts
+ * them on input and normalizes them to `smart` plus the always charge
+ * setting) but are still accepted here, see src/energy/alwaysCharge.ts.
  */
 export type ChargeMode = "off" | "now" | "smart" | "minpv" | "pv";
+
+/**
+ * EVCC's always charge setting (api/chargemodestatus.go, 0.319): in `smart`
+ * mode, keep charging at least at the minimum current. `once` resets when the
+ * vehicle disconnects.
+ */
+export type AlwaysCharge = "off" | "on" | "once";
+
+/** Always charge values the plugin writes. */
+export type AlwaysChargeWrite = "off" | "on";
 
 export interface VehicleState {
   /** Stable name (slug) used as the path identifier in the REST API. */
@@ -29,6 +40,14 @@ export interface LoadpointState {
   title?: string;
   /** Charging mode. */
   mode?: ChargeMode;
+  /** Always charge setting (EVCC 0.319 and later; absent on older versions). */
+  alwaysCharge?: AlwaysCharge;
+  /** Minimum charge current EVCC applies, A (the vehicle's when set, else the loadpoint's). */
+  effectiveMinCurrent?: number;
+  /** Configured minimum charge current of the loadpoint, A. */
+  minCurrent?: number;
+  /** The charger is a switch socket; EVCC rejects always charge for it. */
+  chargerFeatureSwitchDevice?: boolean;
   /** Whether a vehicle is plugged in. */
   connected?: boolean;
   /** Whether the loadpoint is actively delivering power. */

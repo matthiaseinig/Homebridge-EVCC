@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LoadpointAccessory = void 0;
+const alwaysCharge_js_1 = require("../energy/alwaysCharge.js");
 const definitions_js_1 = require("../energy/definitions.js");
 const writeValidation_js_1 = require("../energy/writeValidation.js");
 const hapTypes_js_1 = require("../energy/hapTypes.js");
@@ -42,7 +43,8 @@ const MODE_ROLES = {
  *   - LightSensor       "<title> Power"             CurrentAmbientLightLevel = chargePower (W → lux)
  *   - Switch ×3         "<title> Now"/"PV"/"Min+PV" optional, when modeUi = "switches"
  *   - Custom service    "<title> Energy"            Loadpoint Energy characteristics; Charge Mode,
- *                                                   Set Plan and Charge Limit accept writes
+ *                                                   Always Charge, Set Plan and Charge Limit
+ *                                                   accept writes
  *
  * The charge limit is not a WindowCovering by default: Apple Home ignores custom
  * characteristics, so no scene, "close all blinds" request or automation of the
@@ -138,8 +140,9 @@ class LoadpointAccessory {
         if (this.powerService) {
             this.powerService.updateCharacteristic(C.CurrentAmbientLightLevel, (0, powerToLux_js_1.powerToLux)(this.state.chargePower));
         }
+        const switchMode = (0, alwaysCharge_js_1.legacySwitchMode)(this.state);
         for (const [mode, svc] of this.modeSwitches) {
-            svc.updateCharacteristic(C.On, this.state.mode === mode);
+            svc.updateCharacteristic(C.On, switchMode === mode);
         }
         if (this.energyEnabled)
             this.energy.apply(this.state, this.title());
@@ -259,7 +262,7 @@ class LoadpointAccessory {
                     if (value) {
                         await this.safeSetMode(mode);
                     }
-                    else if (this.state.mode === mode) {
+                    else if ((0, alwaysCharge_js_1.legacySwitchMode)(this.state) === mode) {
                         // Toggling off the active mode → off
                         await this.safeSetMode("off");
                     }
@@ -326,7 +329,7 @@ class LoadpointAccessory {
         (0, applyServiceName_js_1.applyServiceName)(svc, name, this.api.hap.Characteristic);
         return svc;
     }
-    /** Charge Mode, Set Plan and Charge Limit on the Loadpoint Energy service accept writes (validated strictly). */
+    /** Charge Mode, Always Charge, Set Plan and Charge Limit on the Loadpoint Energy service accept writes (validated strictly). */
     configureChargingWrites(svc) {
         const types = (0, hapTypes_js_1.energyHapTypes)(this.api.hap);
         svc.getCharacteristic(types.char("ChargeLimit")).onSet(async (value) => {
@@ -342,6 +345,16 @@ class LoadpointAccessory {
             if (!mode)
                 throw this.hapError("INVALID_VALUE_IN_REQUEST");
             await this.safeSetMode(mode);
+        });
+        svc.getCharacteristic(types.char("AlwaysCharge")).onSet(async (value) => {
+            this.requireWritable();
+            const on = (0, alwaysCharge_js_1.parseAlwaysCharge)(value);
+            if (on === undefined)
+                throw this.hapError("INVALID_VALUE_IN_REQUEST");
+            // Older EVCC has no always charge; switch-socket chargers cannot hold a minimum current.
+            if (!(0, alwaysCharge_js_1.alwaysChargeWritable)(this.state))
+                throw this.hapError("NOT_ALLOWED_IN_CURRENT_STATE");
+            await this.safeSetAlwaysCharge(on ? "on" : "off");
         });
         svc.getCharacteristic(types.char("SetPlan")).onSet(async (value) => {
             this.requireWritable();
@@ -378,14 +391,30 @@ class LoadpointAccessory {
         }[status];
         return new this.api.hap.HapStatusError(code);
     }
-    /** Forward a mode change; an EVCC failure becomes a HAP communication error. */
+    /**
+     * Forward a mode change; an EVCC failure becomes a HAP communication error.
+     * The deprecated `pv` and `minpv` are mapped to `smart` plus always charge
+     * on EVCC that has it (src/energy/alwaysCharge.ts).
+     */
     async safeSetMode(mode) {
+        const plan = (0, alwaysCharge_js_1.planModeWrite)(mode, this.state);
+        if (plan.alwaysCharge)
+            await this.safeSetAlwaysCharge(plan.alwaysCharge);
         try {
             // EVCC REST API uses 1-based loadpoint IDs.
-            await this.client.setLoadpointMode(this.loadpointId + 1, mode);
+            await this.client.setLoadpointMode(this.loadpointId + 1, plan.mode);
         }
         catch (err) {
-            this.log.warn("Failed to set loadpoint %d mode=%s: %s", this.loadpointId + 1, mode, (0, redact_js_1.errorText)(err));
+            this.log.warn("Failed to set loadpoint %d mode=%s: %s", this.loadpointId + 1, plan.mode, (0, redact_js_1.errorText)(err));
+            throw this.hapError("SERVICE_COMMUNICATION_FAILURE");
+        }
+    }
+    async safeSetAlwaysCharge(value) {
+        try {
+            await this.client.setLoadpointAlwaysCharge(this.loadpointId + 1, value);
+        }
+        catch (err) {
+            this.log.warn("Failed to set loadpoint %d alwaysCharge=%s: %s", this.loadpointId + 1, value, (0, redact_js_1.errorText)(err));
             throw this.hapError("SERVICE_COMMUNICATION_FAILURE");
         }
     }
