@@ -8,6 +8,16 @@ Version bumps and entries below are managed by
 [release-please](https://github.com/googleapis/release-please) on every push to
 `main`.
 
+## [1.2.2] - 2026-11-11
+
+### Fixed
+- Security: error texts written to the log (login failed, poll failed, failed to
+  reach EVCC, websocket errors, write failures, sessions errors) could contain
+  the full request URL including `user:password@` when the configured URL has
+  credentials. Every logged error text now goes through `errorText`, which
+  strips URL credentials and replaces the configured password. The sessions
+  `lastError` shown by the LAN API is redacted the same way.
+
 ## [1.2.1] - 2026-11-11
 
 ### Fixed

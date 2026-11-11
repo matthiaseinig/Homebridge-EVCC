@@ -18,6 +18,7 @@ import { LoadpointEnergyService } from "../energy/loadpointEnergy.js";
 import type { LoadpointSummary } from "../sessions/summary.js";
 import { applyServiceName } from "../util/applyServiceName.js";
 import { clampPercent, powerToLux } from "../util/powerToLux.js";
+import { errorText } from "../util/redact.js";
 
 export type LoadpointModeUi = "outlet" | "switches" | "readonly";
 
@@ -455,7 +456,7 @@ export class LoadpointAccessory {
         if (request.kind === "clear") await this.client.deleteVehiclePlanSoc(vehicle);
         else await this.client.setVehiclePlanSoc(vehicle, request.soc, toRfc3339(request.time));
       } catch (err) {
-        this.log.warn("Failed to set plan for vehicle %s: %s", vehicle, (err as Error).message);
+        this.log.warn("Failed to set plan for vehicle %s: %s", vehicle, errorText(err));
         throw this.hapError("SERVICE_COMMUNICATION_FAILURE");
       }
     });
@@ -492,7 +493,7 @@ export class LoadpointAccessory {
         "Failed to set loadpoint %d mode=%s: %s",
         this.loadpointId + 1,
         mode,
-        (err as Error).message,
+        errorText(err),
       );
       throw this.hapError("SERVICE_COMMUNICATION_FAILURE");
     }
@@ -506,7 +507,7 @@ export class LoadpointAccessory {
         "Failed to set loadpoint %d limitSoc=%d: %s",
         this.loadpointId + 1,
         soc,
-        (err as Error).message,
+        errorText(err),
       );
       throw this.hapError("SERVICE_COMMUNICATION_FAILURE");
     }
@@ -516,7 +517,7 @@ export class LoadpointAccessory {
     try {
       await this.client.setVehicleLimitSoc(name, soc);
     } catch (err) {
-      this.log.warn("Failed to set vehicle %s limitSoc=%d: %s", name, soc, (err as Error).message);
+      this.log.warn("Failed to set vehicle %s limitSoc=%d: %s", name, soc, errorText(err));
       throw this.hapError("SERVICE_COMMUNICATION_FAILURE");
     }
   }

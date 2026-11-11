@@ -5,6 +5,7 @@ const chargingStatistics_js_1 = require("../energy/chargingStatistics.js");
 const siteEnergy_js_1 = require("../energy/siteEnergy.js");
 const applyServiceName_js_1 = require("../util/applyServiceName.js");
 const powerToLux_js_1 = require("../util/powerToLux.js");
+const redact_js_1 = require("../util/redact.js");
 const SUBTYPE_BATTERY = "home-battery";
 const SUBTYPE_PV = "pv-power";
 const SUBTYPE_GRID = "grid-power";
@@ -161,7 +162,7 @@ class SiteAccessory {
                     await this.client.setBatteryMode(mode);
                 }
                 catch (err) {
-                    this.log.warn("Failed to set battery mode %s: %s", mode, err.message);
+                    this.log.warn("Failed to set battery mode %s: %s", mode, (0, redact_js_1.errorText)(err));
                     throw new this.api.hap.HapStatusError(-70402 /* this.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE */);
                 }
             });

@@ -4,6 +4,7 @@ import { SessionsServer } from "./server.js";
 import { SessionStore } from "./store.js";
 import { resolveApiToken } from "./token.js";
 import type { SessionsApiConfig } from "./config.js";
+import { errorText } from "../util/redact.js";
 
 export const POLL_INTERVAL_MS = 10 * 60_000;
 /** Delay before the refresh that follows a charging or plug state change. */
@@ -69,7 +70,7 @@ export class SessionsService {
         log.warn("Session log was unreadable and was moved aside to %s", loaded.backup);
       }
     } catch (err) {
-      log.warn("Could not read the session log: %s", (err as Error).message);
+      log.warn("Could not read the session log: %s", errorText(err));
     }
     if (!live()) return;
     this.emit();
@@ -141,7 +142,7 @@ export class SessionsService {
       );
       this.emit();
     } catch (err) {
-      const message = (err as Error).message;
+      const message = errorText(err);
       this.store.lastError = message.slice(0, 200);
       log.warn("Could not refresh the charging sessions: %s", message);
     }
@@ -152,7 +153,7 @@ export class SessionsService {
       try {
         l();
       } catch (err) {
-        this.opts.log.error("Sessions listener threw: %s", (err as Error).message);
+        this.opts.log.error("Sessions listener threw: %s", errorText(err));
       }
     }
   }
@@ -196,7 +197,7 @@ export class SessionsService {
         log.info("Sessions API token is read from %s", token.file);
       }
     } catch (err) {
-      log.error("Sessions API could not start: %s", (err as Error).message);
+      log.error("Sessions API could not start: %s", errorText(err));
     }
   }
 }

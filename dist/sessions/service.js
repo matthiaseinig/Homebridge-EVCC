@@ -5,6 +5,7 @@ const model_js_1 = require("./model.js");
 const server_js_1 = require("./server.js");
 const store_js_1 = require("./store.js");
 const token_js_1 = require("./token.js");
+const redact_js_1 = require("../util/redact.js");
 exports.POLL_INTERVAL_MS = 10 * 60_000;
 /** Delay before the refresh that follows a charging or plug state change. */
 exports.AFTER_SESSION_DELAY_MS = 10_000;
@@ -49,7 +50,7 @@ class SessionsService {
             }
         }
         catch (err) {
-            log.warn("Could not read the session log: %s", err.message);
+            log.warn("Could not read the session log: %s", (0, redact_js_1.errorText)(err));
         }
         if (!live())
             return;
@@ -121,7 +122,7 @@ class SessionsService {
             this.emit();
         }
         catch (err) {
-            const message = err.message;
+            const message = (0, redact_js_1.errorText)(err);
             this.store.lastError = message.slice(0, 200);
             log.warn("Could not refresh the charging sessions: %s", message);
         }
@@ -132,7 +133,7 @@ class SessionsService {
                 l();
             }
             catch (err) {
-                this.opts.log.error("Sessions listener threw: %s", err.message);
+                this.opts.log.error("Sessions listener threw: %s", (0, redact_js_1.errorText)(err));
             }
         }
     }
@@ -175,7 +176,7 @@ class SessionsService {
             }
         }
         catch (err) {
-            log.error("Sessions API could not start: %s", err.message);
+            log.error("Sessions API could not start: %s", (0, redact_js_1.errorText)(err));
         }
     }
 }
