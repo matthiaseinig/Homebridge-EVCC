@@ -5,6 +5,7 @@ import { ChargingStatisticsServices } from "../energy/chargingStatistics.js";
 import { SiteEnergyServices } from "../energy/siteEnergy.js";
 import { applyServiceName } from "../util/applyServiceName.js";
 import { clampPercent, powerToLux } from "../util/powerToLux.js";
+import { errorText } from "../util/redact.js";
 
 export interface SiteAccessoryDeps {
   api: API;
@@ -229,7 +230,7 @@ export class SiteAccessory {
         try {
           await this.client.setBatteryMode(mode);
         } catch (err) {
-          this.log.warn("Failed to set battery mode %s: %s", mode, (err as Error).message);
+          this.log.warn("Failed to set battery mode %s: %s", mode, errorText(err));
           throw new this.api.hap.HapStatusError(
             this.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE,
           );

@@ -355,3 +355,63 @@ describe("EvccClient websocket", () => {
     client.stop();
   });
 });
+
+describe("EvccClient error logging with a credentialed URL", () => {
+  const baseUrl = "http://admin:pw-s3cret@evcc.local:7070";
+  const failing = (): typeof fetch =>
+    vi.fn(async (input: string | URL | Request) => {
+      throw new TypeError(`fetch failed for ${String(input)} (pw-s3cret)`);
+    }) as unknown as typeof fetch;
+
+  function allLogs(log: ReturnType<typeof createMockLogger>): string {
+    return JSON.stringify(
+      ["debug", "info", "warn", "error", "log"].map(
+        (k) => (log as unknown as Record<string, { mock: { calls: unknown[] } }>)[k].mock.calls,
+      ),
+    );
+  }
+
+  it("redacts credentials in the login failure and the failed first poll", async () => {
+    const log = createMockLogger();
+    const client = new EvccClient({
+      baseUrl,
+      password: "pw-s3cret",
+      log,
+      pollIntervalMs: 1000,
+      fetchImpl: failing(),
+      webSocketCtor: getWebSocketCtor(),
+    });
+    await expect(client.start()).rejects.toThrow();
+    client.stop();
+    const logged = allLogs(log);
+    expect(logged).toContain("EVCC login failed");
+    expect(logged).not.toContain("pw-s3cret");
+    expect(logged).not.toContain("admin");
+  });
+
+  it("redacts credentials in the background poll failure", async () => {
+    const log = createMockLogger();
+    const fetch = createMockFetch();
+    fetch.push("/api/state", { body: { pvPower: 0 } });
+    const good = fetch.fetchImpl;
+    let calls = 0;
+    const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      if (calls++ === 0) return good(input, init);
+      throw new TypeError(`fetch failed for ${String(input)}`);
+    }) as unknown as typeof fetch;
+    const client = new EvccClient({
+      baseUrl,
+      log,
+      pollIntervalMs: 1000,
+      fetchImpl,
+      webSocketCtor: getWebSocketCtor(),
+    });
+    await client.start();
+    await vi.advanceTimersByTimeAsync(1_000);
+    client.stop();
+    const logged = allLogs(log);
+    expect(logged).toContain("poll failed");
+    expect(logged).not.toContain("pw-s3cret");
+    expect(logged).not.toContain("admin");
+  });
+});

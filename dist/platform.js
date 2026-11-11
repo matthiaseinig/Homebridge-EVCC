@@ -89,7 +89,7 @@ class EvccPlatform {
             await this.client.start();
         }
         catch (err) {
-            this.log.error("Failed to reach EVCC: %s. The plugin will keep retrying in the background.", err.message);
+            this.log.error("Failed to reach EVCC: %s. The plugin will keep retrying in the background.", (0, redact_js_1.errorText)(err, this.config.password));
         }
         await this.sessions?.start();
     }
