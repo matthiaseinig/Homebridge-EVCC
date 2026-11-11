@@ -334,7 +334,7 @@ describe("LoadpointAccessory", () => {
 
     it("forwards a valid Charge Mode to the EVCC mode endpoint (1-based id)", async () => {
       const { acc, client } = build({ title: "Garage" });
-      for (const mode of ["off", "now", "minpv", "pv"]) {
+      for (const mode of ["off", "now", "smart", "minpv", "pv"]) {
         await write(acc, CHARS.ChargeMode.uuid, mode);
         expect(client.setLoadpointMode).toHaveBeenLastCalledWith(1, mode);
       }
@@ -342,7 +342,7 @@ describe("LoadpointAccessory", () => {
 
     it("rejects an invalid Charge Mode before calling EVCC", async () => {
       const { acc, client } = build({ title: "Garage" });
-      for (const bad of ["PV", "smart", "", 1, null, "pv "]) {
+      for (const bad of ["PV", "Smart", "auto", "", 1, null, "pv "]) {
         await expect(write(acc, CHARS.ChargeMode.uuid, bad)).rejects.toMatchObject(
           status(MockHAPStatus.INVALID_VALUE_IN_REQUEST),
         );

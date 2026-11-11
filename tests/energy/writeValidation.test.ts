@@ -4,9 +4,9 @@ import { parseChargeMode, parsePlanRequest, toRfc3339 } from "../../src/energy/w
 const NOW = 1_900_000_000;
 
 describe("parseChargeMode", () => {
-  it("accepts exactly the four EVCC modes", () => {
-    for (const m of ["off", "now", "minpv", "pv"]) expect(parseChargeMode(m)).toBe(m);
-    for (const bad of ["Off", "smart", " pv", "", 0, undefined, null, {}]) {
+  it("accepts exactly the five EVCC modes, including smart", () => {
+    for (const m of ["off", "now", "smart", "minpv", "pv"]) expect(parseChargeMode(m)).toBe(m);
+    for (const bad of ["Off", "Smart", " pv", "", "auto", 0, undefined, null, {}]) {
       expect(parseChargeMode(bad)).toBeUndefined();
     }
   });

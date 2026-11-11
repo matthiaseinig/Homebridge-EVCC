@@ -1,9 +1,9 @@
 import type { ChargeMode } from "../api/types.js";
 
 /** Modes the plugin forwards to EVCC. Anything else is rejected before EVCC is called. */
-export const WRITABLE_CHARGE_MODES: readonly ChargeMode[] = ["off", "now", "minpv", "pv"];
+export const WRITABLE_CHARGE_MODES: readonly ChargeMode[] = ["off", "now", "smart", "minpv", "pv"];
 
-/** Strictly parse a Charge Mode write; undefined when the value is not one of the four modes. */
+/** Strictly parse a Charge Mode write; undefined when the value is not one of the five modes. */
 export function parseChargeMode(value: unknown): ChargeMode | undefined {
   return typeof value === "string" && (WRITABLE_CHARGE_MODES as readonly string[]).includes(value)
     ? (value as ChargeMode)

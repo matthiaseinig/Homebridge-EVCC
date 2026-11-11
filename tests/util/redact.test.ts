@@ -1,23 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { redactSecret } from "../../src/util/redact.js";
+import { describeSecret, redactUrl } from "../../src/util/redact.js";
 
-describe("redactSecret", () => {
-  it("returns (none) for empty/undefined", () => {
-    expect(redactSecret(undefined)).toBe("(none)");
-    expect(redactSecret("")).toBe("(none)");
+describe("describeSecret", () => {
+  it("reports only whether a secret is configured", () => {
+    expect(describeSecret(undefined)).toBe("not configured");
+    expect(describeSecret("")).toBe("not configured");
+    expect(describeSecret("a")).toBe("configured");
+    expect(describeSecret("correct horse battery staple")).toBe("configured");
+  });
+});
+
+describe("redactUrl", () => {
+  it("passes a URL without credentials through unchanged", () => {
+    expect(redactUrl("http://evcc.local:7070")).toBe("http://evcc.local:7070");
   });
 
-  it("masks short strings (4 or fewer)", () => {
-    expect(redactSecret("ab")).toBe("ab***");
-    expect(redactSecret("abcd")).toBe("ab***");
+  it("strips user and password from the URL", () => {
+    const out = redactUrl("http://admin:s3cret@evcc.local:7070/api");
+    expect(out).toBe("http://***@evcc.local:7070/api");
+    expect(out).not.toContain("admin");
+    expect(out).not.toContain("s3cret");
   });
 
-  it("masks medium strings (5-8) with leading and trailing chars", () => {
-    expect(redactSecret("abcde")).toBe("ab***e");
-    expect(redactSecret("abcdefgh")).toBe("ab***h");
-  });
-
-  it("masks long strings with 4 leading and 2 trailing chars", () => {
-    expect(redactSecret("ABCDEFGHIJK")).toBe("ABCD***JK");
+  it("handles empty and unparseable input without echoing it", () => {
+    expect(redactUrl(undefined)).toBe("(none)");
+    expect(redactUrl("not a url with secret")).toBe("(invalid url)");
   });
 });

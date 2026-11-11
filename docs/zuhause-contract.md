@@ -115,7 +115,7 @@ Charging data and the charging controls. `Loadpoint Last Update` changes wheneve
 | Characteristic | UUID | Format | Access | Unit | Range | Resolution | Sign or domain | EVCC source |
 |---|---|---|---|---|---|---|---|---|
 | Charge Power (`ChargePower`) | `E5C00040-8B93-4652-90CD-F02EAF5356EA` | float | read, notify | W | -1 000 000 .. 1 000 000 | 0.1 | >= 0 | `loadpoints[i].chargePower` |
-| Charge Mode (`ChargeMode`) | `E5C00041-8B93-4652-90CD-F02EAF5356EA` | string | read, write, notify |  | max 16 chars |  |  | `loadpoints[i].mode`; write: `off`, `now`, `minpv` or `pv` |
+| Charge Mode (`ChargeMode`) | `E5C00041-8B93-4652-90CD-F02EAF5356EA` | string | read, write, notify |  | max 16 chars |  |  | `loadpoints[i].mode`; write: `off`, `now`, `smart`, `minpv` or `pv` |
 | Vehicle Connected (`VehicleConnected`) | `E5C00042-8B93-4652-90CD-F02EAF5356EA` | bool | read, notify |  | true / false |  |  | `loadpoints[i].connected` |
 | Charging (`Charging`) | `E5C00043-8B93-4652-90CD-F02EAF5356EA` | bool | read, notify |  | true / false |  |  | `loadpoints[i].charging` |
 | Limit SoC (`LimitSoc`) | `E5C00044-8B93-4652-90CD-F02EAF5356EA` | float | read, notify | % | 0 .. 100 | 0.1 | 0 means no session limit | `loadpoints[i].limitSoc` |
@@ -157,7 +157,7 @@ Writes need the EVCC admin password in the plugin config. `Control Role` identif
 
 | Control Role | Service and characteristic | Present when | Write effect (EVCC REST, loadpoint id = index + 1) | Read-back from EVCC |
 |---|---|---|---|---|
-| `loadpoint-charging` | `Loadpoint Energy`, `Charge Mode` (string) | always | `off`, `now`, `minpv` or `pv`: `POST /api/loadpoints/{id}/mode/{mode}`; any other value is rejected | `Charge Mode` = `mode` |
+| `loadpoint-charging` | `Loadpoint Energy`, `Charge Mode` (string) | always | `off`, `now`, `smart`, `minpv` or `pv` (`minpv` and `pv` are deprecated in EVCC and normalized to `smart`): `POST /api/loadpoints/{id}/mode/{mode}`; any other value is rejected | `Charge Mode` = `mode` |
 | `loadpoint-charging` | `Loadpoint Energy`, `Set Plan` (string) | always | `"<soc>,<epoch seconds>"` (soc an integer 1 .. 100, time in the future): `POST /api/vehicles/{vehicleName}/plan/soc/{soc}/{RFC 3339 UTC time}`; `""` or `"0"`: `DELETE /api/vehicles/{vehicleName}/plan/soc`. `vehicleName` is the vehicle currently at the loadpoint (EVCC keeps SoC plans per vehicle) | `Set Plan` = `<Plan SoC>,<Plan Time>`; `Plan Time`, `Plan SoC`, `Plan Active` |
 | `loadpoint-enable` | `Outlet`, `On` (bool) | always (accepts writes only with `loadpointMode: "outlet"`) | `true`: `POST /api/loadpoints/{id}/mode/{defaultLoadpointMode}`; `false`: `POST /api/loadpoints/{id}/mode/off` | `On` = `enabled` (EVCC is currently allowed to charge, which can be false in `pv` mode without surplus); `OutletInUse` = `connected`; confirm via `Charge Mode` |
 | `loadpoint-mode-now` / `loadpoint-mode-pv` / `loadpoint-mode-minpv` | `Switch`, `On` (bool), one per mode | `loadpointMode: "switches"` | `true`: `POST /api/loadpoints/{id}/mode/{now, pv, minpv}`; `false` on the active mode: `mode/off`; `false` on an inactive mode: ignored | `On` = (`mode` equals this switch's mode) |

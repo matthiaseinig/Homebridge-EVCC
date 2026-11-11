@@ -1,11 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EvccClient } from "../../src/api/client.js";
 import { createMockLogger } from "../helpers/homebridge.js";
-import {
-  MockWebSocket,
-  createMockFetch,
-  getWebSocketCtor,
-} from "../helpers/mockEvcc.js";
+import { MockWebSocket, createMockFetch, getWebSocketCtor } from "../helpers/mockEvcc.js";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -79,12 +75,32 @@ describe("EvccClient login + writes", () => {
     client.stop();
   });
 
+  it("never logs any part of the password", async () => {
+    const password = "hunter2-Sup3rS3cret!";
+    const { client, log, fetch } = buildClient({ password });
+    fetch.push("/api/auth/login", {});
+    fetch.push("/api/state", { body: { pvPower: 0 } });
+    await client.start();
+    client.stop();
+    const logged = JSON.stringify(
+      ["debug", "info", "warn", "error", "log"].map(
+        (k) => (log as unknown as Record<string, { mock: { calls: unknown[] } }>)[k].mock.calls,
+      ),
+    );
+    expect(logged).toContain("EVCC login");
+    expect(logged).toContain("configured");
+    for (const part of [password, "hunt", "ret!", "hunter"]) expect(logged).not.toContain(part);
+  });
+
   it("warns when login fails but still works in read-only mode", async () => {
     const { client, log, fetch } = buildClient({ password: "wrong" });
     fetch.push("/api/auth/login", { status: 401 });
     fetch.push("/api/state", { body: { pvPower: 0 } });
     await client.start();
-    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining("login failed"), expect.any(String));
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.stringContaining("login failed"),
+      expect.any(String),
+    );
     client.stop();
   });
 
@@ -209,7 +225,9 @@ describe("EvccClient websocket", () => {
     await client.start();
     fetch.push("/api/state", { body: { pvPower: 2 } });
     await vi.advanceTimersByTimeAsync(1_000);
-    expect(fetch.calls.filter((c) => c.url.includes("/api/state")).length).toBeGreaterThanOrEqual(2);
+    expect(fetch.calls.filter((c) => c.url.includes("/api/state")).length).toBeGreaterThanOrEqual(
+      2,
+    );
     client.stop();
   });
 
@@ -219,7 +237,10 @@ describe("EvccClient websocket", () => {
     await client.start();
     fetch.push("/api/state", { status: 503 });
     await vi.advanceTimersByTimeAsync(1_000);
-    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining("poll failed"), expect.any(String));
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.stringContaining("poll failed"),
+      expect.any(String),
+    );
     client.stop();
   });
 
