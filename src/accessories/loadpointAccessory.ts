@@ -66,6 +66,7 @@ const SUBTYPE_MODE_MINPV = "mode-minpv";
 
 const MODE_SUBTYPES: Record<ChargeMode, string | null> = {
   off: null,
+  smart: null,
   now: SUBTYPE_MODE_NOW,
   pv: SUBTYPE_MODE_PV,
   minpv: SUBTYPE_MODE_MINPV,

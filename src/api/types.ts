@@ -6,7 +6,12 @@
  * change between releases", so we only type the fields we actually consume.
  */
 
-export type ChargeMode = "off" | "now" | "minpv" | "pv";
+/**
+ * Charge modes of EVCC (api/chargemodestatus.go). `smart` is the current
+ * solar-aware mode; `pv` and `minpv` are deprecated upstream (EVCC accepts them
+ * on input and normalizes them to `smart`) but are still accepted here.
+ */
+export type ChargeMode = "off" | "now" | "smart" | "minpv" | "pv";
 
 export interface VehicleState {
   /** Stable name (slug) used as the path identifier in the REST API. */

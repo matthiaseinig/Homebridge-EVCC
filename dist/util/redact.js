@@ -1,18 +1,32 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.redactSecret = redactSecret;
+exports.describeSecret = describeSecret;
+exports.redactUrl = redactUrl;
 /**
- * Format a secret for log output without leaking it. Returns `"(none)"` for
- * empty values, the first 2 chars + `***` for short strings, otherwise the
- * first 4 chars + `***` + the last 2.
+ * Describe a secret for log output without revealing any part of it: only
+ * whether one is configured.
  */
-function redactSecret(value) {
+function describeSecret(value) {
+    return value ? "configured" : "not configured";
+}
+/**
+ * Strip credentials (user:password@) from a URL before logging it. Input that
+ * does not parse as a URL is replaced entirely rather than risk leaking it.
+ */
+function redactUrl(value) {
     if (!value)
         return "(none)";
-    if (value.length <= 4)
-        return `${value.slice(0, 2)}***`;
-    if (value.length <= 8)
-        return `${value.slice(0, 2)}***${value.slice(-1)}`;
-    return `${value.slice(0, 4)}***${value.slice(-2)}`;
+    try {
+        const u = new URL(value);
+        if (u.username || u.password) {
+            u.username = "";
+            u.password = "";
+            return u.toString().replace(/^([a-z]+:\/\/)/i, "$1***@");
+        }
+        return value;
+    }
+    catch {
+        return "(invalid url)";
+    }
 }
 //# sourceMappingURL=redact.js.map
