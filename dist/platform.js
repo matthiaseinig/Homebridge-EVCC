@@ -7,6 +7,7 @@ const loadpointAccessory_js_1 = require("./accessories/loadpointAccessory.js");
 const siteAccessory_js_1 = require("./accessories/siteAccessory.js");
 const vehiclePresenceAccessory_js_1 = require("./accessories/vehiclePresenceAccessory.js");
 const settings_js_1 = require("./settings.js");
+const redact_js_1 = require("./util/redact.js");
 const SITE_ACCESSORY_KEY = "evcc-site";
 const LOADPOINT_KEY = (i) => `evcc-loadpoint-${i}`;
 const VEHICLE_KEY = (name) => `evcc-vehicle-${name}`;
@@ -61,7 +62,7 @@ class EvccPlatform {
     async start() {
         if (!this.client)
             return;
-        this.log.info("Starting EVCC platform (url=%s, writable=%s)", this.config.url, this.writable);
+        this.log.info("Starting EVCC platform (url=%s, writable=%s)", (0, redact_js_1.redactUrl)(this.config.url), this.writable);
         try {
             await this.client.start();
         }

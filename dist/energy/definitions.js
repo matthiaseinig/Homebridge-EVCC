@@ -253,7 +253,7 @@ exports.CHARS = {
         format: "string",
         maxLen: 16,
         writable: true,
-        source: "`loadpoints[i].mode`; write: `off`, `now`, `minpv` or `pv`",
+        source: "`loadpoints[i].mode`; write: `off`, `now`, `smart`, `minpv` or `pv`",
     },
     VehicleConnected: {
         uuid: charUuid("0042"),

@@ -5,8 +5,8 @@ exports.parseChargeMode = parseChargeMode;
 exports.parsePlanRequest = parsePlanRequest;
 exports.toRfc3339 = toRfc3339;
 /** Modes the plugin forwards to EVCC. Anything else is rejected before EVCC is called. */
-exports.WRITABLE_CHARGE_MODES = ["off", "now", "minpv", "pv"];
-/** Strictly parse a Charge Mode write; undefined when the value is not one of the four modes. */
+exports.WRITABLE_CHARGE_MODES = ["off", "now", "smart", "minpv", "pv"];
+/** Strictly parse a Charge Mode write; undefined when the value is not one of the five modes. */
 function parseChargeMode(value) {
     return typeof value === "string" && exports.WRITABLE_CHARGE_MODES.includes(value)
         ? value
