@@ -202,6 +202,9 @@ describe("loadpointValues", () => {
       LoadpointLastUpdate: 1_900_000_000,
       SetPlan: `90,${FIXTURE_PLAN_EPOCH}`,
       ChargeLimit: 80,
+      // Legacy `pv` from an older EVCC reads as always charge off.
+      AlwaysCharge: false,
+      MinCurrent: undefined,
     });
   });
 

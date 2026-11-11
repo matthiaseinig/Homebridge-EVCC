@@ -8,6 +8,28 @@ Version bumps and entries below are managed by
 [release-please](https://github.com/googleapis/release-please) on every push to
 `main`.
 
+## [1.3.0] - 2026-11-11
+
+### Added
+- `Always Charge` (E5C00052, bool, read and write) on `Loadpoint Energy`:
+  EVCC 0.319 replaced the `pv` and `minpv` modes with `smart` plus an "always
+  charge" setting (charge without interruptions, at least at the minimum
+  current). Read: `alwaysCharge` is `on` or `once`; write: `POST
+  /api/loadpoints/{id}/alwayscharge/{on|off}` (source: `api/chargemode.go`,
+  `api/chargemodestatus.go` and `server/http.go` in evcc-io/evcc 0.319.0).
+  Refused with `NOT_ALLOWED_IN_CURRENT_STATE` on older EVCC and on
+  switch-socket chargers, which EVCC does not allow always charge for.
+- `Min Current` (E5C00053, float, A, read only): `effectiveMinCurrent`, so apps
+  can label the setting ("always charge, min 7 A").
+
+### Changed
+- `Charge Mode` writes of the deprecated `pv` and `minpv` are mapped on EVCC
+  0.319: `pv` sets always charge off and the mode to `smart`, `minpv` sets
+  always charge on and the mode to `smart`. Older EVCC gets them unchanged.
+  The outlet's default mode (`pv`) goes through the same mapping.
+- The legacy mode switches (`loadpointMode: "switches"`) show `smart` as Min+PV
+  while always charge is active and as PV otherwise, so they work on EVCC 0.319.
+
 ## [1.2.2] - 2026-11-11
 
 ### Fixed

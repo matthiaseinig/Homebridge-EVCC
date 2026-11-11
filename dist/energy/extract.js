@@ -6,6 +6,7 @@ exports.auxMeterEntries = auxMeterEntries;
 exports.statisticsEntries = statisticsEntries;
 exports.formatPlan = formatPlan;
 exports.loadpointValues = loadpointValues;
+const alwaysCharge_js_1 = require("./alwaysCharge.js");
 const sanitize_js_1 = require("./sanitize.js");
 const PERIOD_PATTERN = /^[A-Za-z0-9]{1,16}$/;
 function records(v) {
@@ -129,6 +130,8 @@ function loadpointValues(lp, nowSeconds) {
         LoadpointLastUpdate: nowSeconds,
         SetPlan: formatPlan(planTime, planSoc),
         ChargeLimit: (0, sanitize_js_1.num)(lp.limitSoc),
+        AlwaysCharge: (0, alwaysCharge_js_1.alwaysChargeActive)(lp),
+        MinCurrent: (0, sanitize_js_1.num)(lp.effectiveMinCurrent) ?? (0, sanitize_js_1.num)(lp.minCurrent),
     };
 }
 //# sourceMappingURL=extract.js.map

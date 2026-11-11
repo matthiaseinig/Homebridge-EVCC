@@ -5,7 +5,8 @@
  * Two groups:
  *   - site energy (Energy Site, PV Array, Aux Meter): read-only
  *   - charging (Loadpoint Energy, Charging Statistics, control tags): read-only
- *     except Charge Mode, Set Plan and Charge Limit, which forward writes to EVCC
+ *     except Charge Mode, Always Charge, Set Plan and Charge Limit, which forward
+ *     writes to EVCC
  *
  * The UUIDs were generated once and are a public contract: never change or
  * reuse one. Add new entries with new UUIDs instead. The full contract,
@@ -253,7 +254,7 @@ exports.CHARS = {
         format: "string",
         maxLen: 16,
         writable: true,
-        source: "`loadpoints[i].mode`; write: `off`, `now`, `smart`, `minpv` or `pv`",
+        source: "`loadpoints[i].mode` (EVCC 0.319: `off`, `smart` or `now`); write: `off`, `now`, `smart`, `minpv` or `pv`",
     },
     VehicleConnected: {
         uuid: charUuid("0042"),
@@ -372,6 +373,25 @@ exports.CHARS = {
         writable: true,
         source: "read: `loadpoints[i].limitSoc`; write: integer 0 .. 100, see Charging controls",
         sign: "0 means no session limit",
+    },
+    AlwaysCharge: {
+        uuid: charUuid("0052"),
+        name: "Always Charge",
+        ...FLAG,
+        writable: true,
+        source: "read: `loadpoints[i].alwaysCharge` is `on` or `once` (older EVCC: `mode` is `minpv`); write: see Charging controls",
+        sign: "applies in `smart` mode: charge at least at Min Current, without interruptions",
+    },
+    MinCurrent: {
+        uuid: charUuid("0053"),
+        name: "Min Current",
+        format: "float",
+        unit: "A",
+        min: 0,
+        max: 1_000,
+        decimals: 1,
+        source: "`loadpoints[i].effectiveMinCurrent`, else `minCurrent`",
+        sign: ">= 0",
     },
     // Charging: statistics (one service per EVCC statistics period).
     StatPeriod: {
@@ -536,6 +556,8 @@ exports.SERVICES = {
             "LoadpointLastUpdate",
             "SetPlan",
             "ChargeLimit",
+            "AlwaysCharge",
+            "MinCurrent",
         ],
     },
     ChargingStatistics: {
