@@ -134,6 +134,23 @@ describe("EvccClient login + writes", () => {
     client.stop();
   });
 
+  it("never logs any part of the password", async () => {
+    const password = "hunter2-Sup3rS3cret!";
+    const { client, log, fetch } = buildClient({ password });
+    fetch.push("/api/auth/login", {});
+    fetch.push("/api/state", { body: { pvPower: 0 } });
+    await client.start();
+    client.stop();
+    const logged = JSON.stringify(
+      ["debug", "info", "warn", "error", "log"].map(
+        (k) => (log as unknown as Record<string, { mock: { calls: unknown[] } }>)[k].mock.calls,
+      ),
+    );
+    expect(logged).toContain("EVCC login");
+    expect(logged).toContain("configured");
+    for (const part of [password, "hunt", "ret!", "hunter"]) expect(logged).not.toContain(part);
+  });
+
   it("warns when login fails but still works in read-only mode", async () => {
     const { client, log, fetch } = buildClient({ password: "wrong" });
     fetch.push("/api/auth/login", { status: 401 });

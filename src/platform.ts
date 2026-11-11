@@ -17,6 +17,7 @@ import { parseSessionsConfig } from "./sessions/config.js";
 import { SessionsService } from "./sessions/service.js";
 import { loadpointSummary } from "./sessions/summary.js";
 import { PLATFORM_NAME, PLUGIN_NAME } from "./settings.js";
+import { redactUrl } from "./util/redact.js";
 
 export interface EvccPlatformConfig extends PlatformConfig {
   /** Base URL of the EVCC instance, e.g. `http://evcc.local:7070`. */
@@ -146,7 +147,7 @@ export class EvccPlatform implements DynamicPlatformPlugin {
 
   private async start(): Promise<void> {
     if (!this.client) return;
-    this.log.info("Starting EVCC platform (url=%s, writable=%s)", this.config.url, this.writable);
+    this.log.info("Starting EVCC platform (url=%s, writable=%s)", redactUrl(this.config.url), this.writable);
     try {
       await this.client.start();
     } catch (err) {

@@ -18,6 +18,7 @@ const SUBTYPE_MODE_PV = "mode-pv";
 const SUBTYPE_MODE_MINPV = "mode-minpv";
 const MODE_SUBTYPES = {
     off: null,
+    smart: null,
     now: SUBTYPE_MODE_NOW,
     pv: SUBTYPE_MODE_PV,
     minpv: SUBTYPE_MODE_MINPV,
