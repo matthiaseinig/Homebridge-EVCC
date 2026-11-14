@@ -17,7 +17,7 @@ The app reads site energy from the Fronius plugin first and uses this plugin's s
 
 ## Rules for every custom characteristic
 
-- **Access.** Every custom characteristic is paired read plus notify. Only `Charge Mode`, `Set Plan` and `Charge Limit` are also paired write; see [Charging controls](#charging-controls).
+- **Access.** Every custom characteristic is paired read plus notify. Only `Charge Mode`, `Always Charge`, `Set Plan` and `Charge Limit` are also paired write; see [Charging controls](#charging-controls).
 - **UUIDs are stable.** They were generated once (2026-11-10) and are never changed or reused. All types share the suffix `-8B93-4652-90CD-F02EAF5356EA`; characteristics start with `E5C0`, services with `E5C1`. New data gets new UUIDs; a meaning never changes under an existing UUID.
 - **Units.** The unit column is part of the contract. Only percentages carry a HAP unit (`percentage`); W, kWh, A, km, g/kWh, currency/kWh and timestamps are not encoded in the HAP metadata (HAP has no such units), so the app must take them from this document.
 - **Energy is always kWh.** EVCC publishes `sessionEnergy` and `todayEnergy` in Wh (the upstream OpenAPI text says kWh, the EVCC code publishes Wh); the plugin divides them by 1000.
@@ -116,7 +116,7 @@ Charging data and the charging controls. `Loadpoint Last Update` changes wheneve
 | Characteristic | UUID | Format | Access | Unit | Range | Resolution | Sign or domain | EVCC source |
 |---|---|---|---|---|---|---|---|---|
 | Charge Power (`ChargePower`) | `E5C00040-8B93-4652-90CD-F02EAF5356EA` | float | read, notify | W | -1 000 000 .. 1 000 000 | 0.1 | >= 0 | `loadpoints[i].chargePower` |
-| Charge Mode (`ChargeMode`) | `E5C00041-8B93-4652-90CD-F02EAF5356EA` | string | read, write, notify |  | max 16 chars |  |  | `loadpoints[i].mode`; write: `off`, `now`, `smart`, `minpv` or `pv` |
+| Charge Mode (`ChargeMode`) | `E5C00041-8B93-4652-90CD-F02EAF5356EA` | string | read, write, notify |  | max 16 chars |  |  | `loadpoints[i].mode` (EVCC 0.319: `off`, `smart` or `now`); write: `off`, `now`, `smart`, `minpv` or `pv` |
 | Vehicle Connected (`VehicleConnected`) | `E5C00042-8B93-4652-90CD-F02EAF5356EA` | bool | read, notify |  | true / false |  |  | `loadpoints[i].connected` |
 | Charging (`Charging`) | `E5C00043-8B93-4652-90CD-F02EAF5356EA` | bool | read, notify |  | true / false |  |  | `loadpoints[i].charging` |
 | Limit SoC (`LimitSoc`) | `E5C00044-8B93-4652-90CD-F02EAF5356EA` | float | read, notify | % | 0 .. 100 | 0.1 | 0 means no session limit | `loadpoints[i].limitSoc` |
@@ -133,6 +133,8 @@ Charging data and the charging controls. `Loadpoint Last Update` changes wheneve
 | Loadpoint Last Update (`LoadpointLastUpdate`) | `E5C0004F-8B93-4652-90CD-F02EAF5356EA` | uint32 | read, notify | s since 1970-01-01 UTC | 0 .. 4 294 967 295 | 1 |  | plugin clock when it last applied EVCC data for this loadpoint (REST poll or a websocket frame for this loadpoint) |
 | Set Plan (`SetPlan`) | `E5C00050-8B93-4652-90CD-F02EAF5356EA` | string | read, write, notify |  | max 32 chars |  | empty = no plan | read: `<Plan SoC>,<Plan Time>` or empty; write: see Charging controls |
 | Charge Limit (`ChargeLimit`) | `E5C00051-8B93-4652-90CD-F02EAF5356EA` | float | read, write, notify | % | 0 .. 100 | 1 | 0 means no session limit | read: `loadpoints[i].limitSoc`; write: integer 0 .. 100, see Charging controls |
+| Always Charge (`AlwaysCharge`) | `E5C00052-8B93-4652-90CD-F02EAF5356EA` | bool | read, write, notify |  | true / false |  | applies in `smart` mode: charge at least at Min Current, without interruptions | read: `loadpoints[i].alwaysCharge` is `on` or `once` (older EVCC: `mode` is `minpv`); write: see Charging controls |
+| Min Current (`MinCurrent`) | `E5C00053-8B93-4652-90CD-F02EAF5356EA` | float | read, notify | A | 0 .. 1 000 | 0.1 | >= 0 | `loadpoints[i].effectiveMinCurrent`, else `minCurrent` |
 
 ### Charging Statistics (`ChargingStatistics`)
 
@@ -172,11 +174,12 @@ Writes need the EVCC admin password in the plugin config. `Control Role` identif
 
 | Control Role | Service and characteristic | Present when | Write effect (EVCC REST, loadpoint id = index + 1) | Read-back from EVCC |
 |---|---|---|---|---|
-| `loadpoint-charging` | `Loadpoint Energy`, `Charge Mode` (string) | always | `off`, `now`, `smart`, `minpv` or `pv` (`minpv` and `pv` are deprecated in EVCC and normalized to `smart`): `POST /api/loadpoints/{id}/mode/{mode}`; any other value is rejected | `Charge Mode` = `mode` |
+| `loadpoint-charging` | `Loadpoint Energy`, `Charge Mode` (string) | always | `off`, `now` or `smart`: `POST /api/loadpoints/{id}/mode/{mode}`. The deprecated `pv` and `minpv` are still accepted: on EVCC with always charge (0.319 and later) `pv` becomes `POST .../alwayscharge/off` then `POST .../mode/smart`, and `minpv` becomes `POST .../alwayscharge/on` then `POST .../mode/smart` (switch-socket chargers: only `mode/smart`); older EVCC gets `mode/pv` or `mode/minpv` unchanged. Any other value is rejected | `Charge Mode` = `mode` (EVCC 0.319 reports only `off`, `smart` or `now`) |
+| `loadpoint-charging` | `Loadpoint Energy`, `Always Charge` (bool) | always | `true`: `POST /api/loadpoints/{id}/alwayscharge/on`; `false`: `POST /api/loadpoints/{id}/alwayscharge/off`. Takes effect in `smart` mode (charge without interruptions, at least at `Min Current`). Refused with `NOT_ALLOWED_IN_CURRENT_STATE` on EVCC without always charge (before 0.319) and on switch-socket chargers | `Always Charge` = `alwaysCharge` is `on` or `once` (`once`, set in EVCC's own UI, ends when the vehicle disconnects) |
 | `loadpoint-charging` | `Loadpoint Energy`, `Set Plan` (string) | always | `"<soc>,<epoch seconds>"` (soc an integer 1 .. 100, time in the future): `POST /api/vehicles/{vehicleName}/plan/soc/{soc}/{RFC 3339 UTC time}`; `""` or `"0"`: `DELETE /api/vehicles/{vehicleName}/plan/soc`. `vehicleName` is the vehicle currently at the loadpoint (EVCC keeps SoC plans per vehicle) | `Set Plan` = `<Plan SoC>,<Plan Time>`; `Plan Time`, `Plan SoC`, `Plan Active` |
 | `loadpoint-charging` | `Loadpoint Energy`, `Charge Limit` (float, HAP `minStep` 1) | always | an integer 0 .. 100: `POST /api/loadpoints/{id}/limitsoc/{value}` (0 clears the session limit); fractions, strings and values outside 0 .. 100 are rejected | `Charge Limit` = `limitSoc`, also in `Limit SoC` |
 | `loadpoint-enable` | `Outlet`, `On` (bool) | always (accepts writes only with `loadpointMode: "outlet"`) | `true`: `POST /api/loadpoints/{id}/mode/{defaultLoadpointMode}`; `false`: `POST /api/loadpoints/{id}/mode/off` | `On` = `enabled` (EVCC is currently allowed to charge, which can be false in `pv` mode without surplus); `OutletInUse` = `connected`; confirm via `Charge Mode` |
-| `loadpoint-mode-now` / `loadpoint-mode-pv` / `loadpoint-mode-minpv` | `Switch`, `On` (bool), one per mode | `loadpointMode: "switches"` | `true`: `POST /api/loadpoints/{id}/mode/{now, pv, minpv}`; `false` on the active mode: `mode/off`; `false` on an inactive mode: ignored | `On` = (`mode` equals this switch's mode) |
+| `loadpoint-mode-now` / `loadpoint-mode-pv` / `loadpoint-mode-minpv` | `Switch`, `On` (bool), one per mode | `loadpointMode: "switches"` | `true`: `POST /api/loadpoints/{id}/mode/now`, or for PV and Min+PV the mapped `Charge Mode` write above; `false` on the active mode: `mode/off`; `false` on an inactive mode: ignored | `On` = (`mode` equals this switch's mode; on EVCC 0.319 `smart` counts as `minpv` while always charge is active, else as `pv`) |
 | `loadpoint-limit-soc` | `WindowCovering`, `TargetPosition` (0 .. 100 %, step 1) | legacy, only with `limitWindowCovering: true` (default `false`) | `POST /api/loadpoints/{id}/limitsoc/{value}` (rounded; 0 clears the session limit) | `TargetPosition` = `limitSoc`, mirrored in `Limit SoC`; `CurrentPosition` = `vehicleSoc` |
 | `vehicle-limit-soc` | `WindowCovering`, `TargetPosition` (0 .. 100 %, step 1) | legacy, only with `limitWindowCovering: true` and `exposeVehicleLimit: true` | `POST /api/vehicles/{vehicleName}/limitsoc/{value}`; ignored when no vehicle is assigned | none: the plugin does not update this slider from EVCC |
 
@@ -186,13 +189,13 @@ Writes need the EVCC admin password in the plugin config. `Control Role` identif
 |---|---|
 | EVCC accepted the call (2xx) | success |
 | EVCC rejected it (non-2xx, for example 401) or was unreachable (network error, 10 s timeout) | `SERVICE_COMMUNICATION_FAILURE` (-70402) |
-| `Charge Mode`, `Set Plan` or `Charge Limit` value fails validation | `INVALID_VALUE_IN_REQUEST` (-70410) |
-| `Set Plan` while no vehicle is at the loadpoint | `NOT_ALLOWED_IN_CURRENT_STATE` (-70412) |
-| `Charge Mode`, `Set Plan` or `Charge Limit` while `Control Enabled` is `false` | `INSUFFICIENT_PRIVILEGES` (-70401) |
+| `Charge Mode`, `Always Charge`, `Set Plan` or `Charge Limit` value fails validation | `INVALID_VALUE_IN_REQUEST` (-70410) |
+| `Set Plan` while no vehicle is at the loadpoint; `Always Charge` on EVCC before 0.319 or on a switch-socket charger | `NOT_ALLOWED_IN_CURRENT_STATE` (-70412) |
+| `Charge Mode`, `Always Charge`, `Set Plan` or `Charge Limit` while `Control Enabled` is `false` | `INSUFFICIENT_PRIVILEGES` (-70401) |
 
-The communication failure applies to every write path of the plugin (outlet, mode switches, `Charge Mode`, `Set Plan`, `Charge Limit`, the legacy limit sliders, and the site's battery-mode switches). In the Apple Home app it shows as "No Response" on the tile. After a failure the characteristic keeps its previous value. After a success, EVCC publishes the new state on its websocket (or the next poll picks it up) and the read-back characteristics follow.
+The communication failure applies to every write path of the plugin (outlet, mode switches, `Charge Mode`, `Always Charge`, `Set Plan`, `Charge Limit`, the legacy limit sliders, and the site's battery-mode switches). In the Apple Home app it shows as "No Response" on the tile. After a failure the characteristic keeps its previous value. After a success, EVCC publishes the new state on its websocket (or the next poll picks it up) and the read-back characteristics follow.
 
-**Recommended configuration for app steering:** admin password set, `limitWindowCovering` left at `false`. `Charge Mode`, `Set Plan` and `Charge Limit` work with any `loadpointMode` except `readonly`.
+**Recommended configuration for app steering:** admin password set, `limitWindowCovering` left at `false`. `Charge Mode`, `Always Charge`, `Set Plan` and `Charge Limit` work with any `loadpointMode` except `readonly`.
 
 **Charge limit and Apple Home scenes (plugin 1.2.0).** Up to plugin 1.1.0 the charge limit was a `WindowCovering` (`loadpoint-limit-soc`, and `vehicle-limit-soc` with `exposeVehicleLimit`). With HomeKit writes on, an Apple Home scene or a Siri request such as "close all blinds" set its `TargetPosition` and so changed the car's charge limit. From 1.2.0:
 

@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events";
 import WebSocket from "ws";
 import { describeSecret, redactUrl, errorText } from "../util/redact.js";
 import { applyUpdate, parseFrame } from "./decoders.js";
-import type { ChargeMode, EvccState, WebSocketUpdate } from "./types.js";
+import type { AlwaysChargeWrite, ChargeMode, EvccState, WebSocketUpdate } from "./types.js";
 
 export const DEFAULT_POLL_INTERVAL_MS = 30_000;
 export const DEFAULT_RECONNECT_DELAY_MS = 5_000;
@@ -224,14 +224,17 @@ export class EvccClient extends EventEmitter {
     await this.post(`/api/loadpoints/${loadpointId}/mode/${mode}`);
   }
 
+  /** EVCC 0.319: `POST /api/loadpoints/{id}/alwayscharge/{off|on}`. */
+  async setLoadpointAlwaysCharge(loadpointId: number, value: AlwaysChargeWrite): Promise<void> {
+    await this.post(`/api/loadpoints/${loadpointId}/alwayscharge/${value}`);
+  }
+
   async setLoadpointLimitSoc(loadpointId: number, soc: number): Promise<void> {
     await this.post(`/api/loadpoints/${loadpointId}/limitsoc/${Math.round(soc)}`);
   }
 
   async setVehicleLimitSoc(vehicleName: string, soc: number): Promise<void> {
-    await this.post(
-      `/api/vehicles/${encodeURIComponent(vehicleName)}/limitsoc/${Math.round(soc)}`,
-    );
+    await this.post(`/api/vehicles/${encodeURIComponent(vehicleName)}/limitsoc/${Math.round(soc)}`);
   }
 
   async setBatteryMode(mode: "normal" | "hold" | "charge"): Promise<void> {

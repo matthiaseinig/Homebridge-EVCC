@@ -55,11 +55,11 @@ describe("energy definitions", () => {
     expect([...sections].sort()).toEqual(Object.keys(SERVICES).sort());
   });
 
-  it("makes only Charge Mode, Set Plan and Charge Limit writable", () => {
+  it("makes only Charge Mode, Always Charge, Set Plan and Charge Limit writable", () => {
     const writable = (Object.keys(CHARS) as CharKey[]).filter(
       (k) => (CHARS[k] as { writable?: boolean }).writable,
     );
-    expect(writable.sort()).toEqual(["ChargeLimit", "ChargeMode", "SetPlan"]);
+    expect(writable.sort()).toEqual(["AlwaysCharge", "ChargeLimit", "ChargeMode", "SetPlan"]);
   });
 
   it("lists each characteristic at most once per service", () => {

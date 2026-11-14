@@ -93,12 +93,12 @@ describe("custom types on real HAP-NodeJS", () => {
     );
   });
 
-  it("only Charge Mode, Set Plan and Charge Limit are writable; everything else is read and notify", () => {
+  it("only Charge Mode, Always Charge, Set Plan and Charge Limit are writable; everything else is read and notify", () => {
     const types = energyHapTypes(hap);
     for (const key of Object.keys(CHARS) as CharKey[]) {
       const c = new (types.char(key))();
       const expected =
-        key === "ChargeMode" || key === "SetPlan" || key === "ChargeLimit"
+        key === "ChargeMode" || key === "AlwaysCharge" || key === "SetPlan" || key === "ChargeLimit"
           ? ["pr", "pw", "ev"]
           : ["pr", "ev"];
       expect(c.props.perms, key).toEqual(expected);

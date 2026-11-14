@@ -1,4 +1,5 @@
 import type { EvccState, LoadpointState, MeterReading, StatisticsPeriod } from "../api/types.js";
+import { alwaysChargeActive } from "./alwaysCharge.js";
 import type { CharValues } from "./definitions.js";
 import type { ServiceEntry } from "./serviceSet.js";
 import { bool, num, shareToPercent, str, toEpochSeconds, whToKwh } from "./sanitize.js";
@@ -152,5 +153,7 @@ export function loadpointValues(lp: LoadpointState, nowSeconds: number): CharVal
     LoadpointLastUpdate: nowSeconds,
     SetPlan: formatPlan(planTime, planSoc),
     ChargeLimit: num(lp.limitSoc),
+    AlwaysCharge: alwaysChargeActive(lp),
+    MinCurrent: num(lp.effectiveMinCurrent) ?? num(lp.minCurrent),
   };
 }

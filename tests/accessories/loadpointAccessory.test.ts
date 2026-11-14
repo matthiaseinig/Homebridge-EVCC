@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { LoadpointAccessory, type LoadpointAccessoryConfig } from "../../src/accessories/loadpointAccessory.js";
+import {
+  LoadpointAccessory,
+  type LoadpointAccessoryConfig,
+} from "../../src/accessories/loadpointAccessory.js";
 import type { EvccClient } from "../../src/api/client.js";
 import type { LoadpointState } from "../../src/api/types.js";
 import { CHARS, CONTROL_ROLES, SERVICES } from "../../src/energy/definitions.js";
@@ -15,6 +18,7 @@ import {
 function makeClient(): EvccClient {
   return {
     setLoadpointMode: vi.fn(async () => undefined),
+    setLoadpointAlwaysCharge: vi.fn(async () => undefined),
     setLoadpointLimitSoc: vi.fn(async () => undefined),
     setVehicleLimitSoc: vi.fn(async () => undefined),
     setBatteryMode: vi.fn(async () => undefined),
@@ -66,6 +70,23 @@ describe("LoadpointAccessory", () => {
     expect(types.some((t) => t.startsWith("WindowCovering/"))).toBe(false);
     expect(types).toContain("Battery/vehicle-battery");
     expect(types).toContain("LightSensor/charge-power");
+  });
+
+  it("shows smart as PV or Min+PV on the mode switches with EVCC 0.319", async () => {
+    const { acc, lp, client } = build(
+      { mode: "smart", alwaysCharge: "on" },
+      { modeUi: "switches" },
+    );
+    const on = (sub: string) =>
+      acc.services.find((s) => s.subtype === sub)!.charMap.get("On")?.value;
+    expect([on("mode-now"), on("mode-pv"), on("mode-minpv")]).toEqual([false, false, true]);
+    lp.applyPartial("alwaysCharge", "off");
+    expect([on("mode-now"), on("mode-pv"), on("mode-minpv")]).toEqual([false, true, false]);
+    // Turning off the active PV switch turns charging off.
+    await acc.services.find((s) => s.subtype === "mode-pv")!.getCharacteristic("On").onSetHandler!(
+      false,
+    );
+    expect(client.setLoadpointMode).toHaveBeenLastCalledWith(1, "off");
   });
 
   it("renders the vehicle-limit blinds when configured with the legacy window covering option", () => {
@@ -162,13 +183,10 @@ describe("LoadpointAccessory", () => {
     const { acc, client, log } = build({});
     (client.setLoadpointMode as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("boom"));
     const outlet = acc.services.find((s) => s.subtype === "outlet")!;
-    await expect(outlet.getCharacteristic("On").onSetHandler!(true)).rejects.toMatchObject({ hapStatus: MockHAPStatus.SERVICE_COMMUNICATION_FAILURE });
-    expect(log.warn).toHaveBeenCalledWith(
-      expect.stringContaining("loadpoint"),
-      1,
-      "pv",
-      "boom",
-    );
+    await expect(outlet.getCharacteristic("On").onSetHandler!(true)).rejects.toMatchObject({
+      hapStatus: MockHAPStatus.SERVICE_COMMUNICATION_FAILURE,
+    });
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining("loadpoint"), 1, "pv", "boom");
   });
 
   it("logs and returns a HAP communication failure when setLoadpointLimitSoc fails", async () => {
@@ -177,13 +195,10 @@ describe("LoadpointAccessory", () => {
       new Error("ouch"),
     );
     const cov = acc.services.find((s) => s.subtype === "limit-loadpoint")!;
-    await expect(cov.getCharacteristic("TargetPosition").onSetHandler!(70)).rejects.toMatchObject({ hapStatus: MockHAPStatus.SERVICE_COMMUNICATION_FAILURE });
-    expect(log.warn).toHaveBeenCalledWith(
-      expect.stringContaining("limitSoc"),
-      1,
-      70,
-      "ouch",
-    );
+    await expect(cov.getCharacteristic("TargetPosition").onSetHandler!(70)).rejects.toMatchObject({
+      hapStatus: MockHAPStatus.SERVICE_COMMUNICATION_FAILURE,
+    });
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining("limitSoc"), 1, 70, "ouch");
   });
 
   it("logs and returns a HAP communication failure when setVehicleLimitSoc fails", async () => {
@@ -191,17 +206,12 @@ describe("LoadpointAccessory", () => {
       { vehicleName: "ev1" },
       { exposeVehicleLimit: true, limitWindowCovering: true },
     );
-    (client.setVehicleLimitSoc as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new Error("bad"),
-    );
+    (client.setVehicleLimitSoc as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("bad"));
     const cov = acc.services.find((s) => s.subtype === "limit-vehicle")!;
-    await expect(cov.getCharacteristic("TargetPosition").onSetHandler!(85)).rejects.toMatchObject({ hapStatus: MockHAPStatus.SERVICE_COMMUNICATION_FAILURE });
-    expect(log.warn).toHaveBeenCalledWith(
-      expect.stringContaining("vehicle"),
-      "ev1",
-      85,
-      "bad",
-    );
+    await expect(cov.getCharacteristic("TargetPosition").onSetHandler!(85)).rejects.toMatchObject({
+      hapStatus: MockHAPStatus.SERVICE_COMMUNICATION_FAILURE,
+    });
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining("vehicle"), "ev1", 85, "bad");
   });
 
   it("applyState updates outlet, battery, lightsensor and legacy limit characteristics", () => {
@@ -260,7 +270,9 @@ describe("LoadpointAccessory", () => {
     lp.applyPartial("chargePower", 1100.06);
     expect(svc.getCharacteristic(CHARS.ChargePower.uuid).value).toBe(1100.1);
     lp.applyPartial("effectivePlanTime", "2030-01-02T06:30:00Z");
-    expect(svc.getCharacteristic(CHARS.PlanTime.uuid).value).toBe(Date.UTC(2030, 0, 2, 6, 30) / 1000);
+    expect(svc.getCharacteristic(CHARS.PlanTime.uuid).value).toBe(
+      Date.UTC(2030, 0, 2, 6, 30) / 1000,
+    );
   });
 
   it("with energy disabled adds no energy service and removes a cached one", () => {
@@ -292,7 +304,10 @@ describe("LoadpointAccessory", () => {
         { title: "Garage" },
         { exposeVehicleLimit: true, limitWindowCovering: true },
       );
-      expect(role(acc, "loadpoint-energy")).toEqual({ role: CONTROL_ROLES.charging, enabled: true });
+      expect(role(acc, "loadpoint-energy")).toEqual({
+        role: CONTROL_ROLES.charging,
+        enabled: true,
+      });
       expect(role(acc, "outlet")).toEqual({ role: CONTROL_ROLES.outlet, enabled: true });
       expect(role(acc, "limit-loadpoint")).toEqual({
         role: CONTROL_ROLES.limitLoadpoint,
@@ -342,6 +357,94 @@ describe("LoadpointAccessory", () => {
         await write(acc, CHARS.ChargeMode.uuid, mode);
         expect(client.setLoadpointMode).toHaveBeenLastCalledWith(1, mode);
       }
+    });
+
+    it("maps legacy pv/minpv writes to smart plus always charge on EVCC 0.319", async () => {
+      const { acc, client } = build({ title: "Garage", mode: "smart", alwaysCharge: "off" });
+      await write(acc, CHARS.ChargeMode.uuid, "minpv");
+      expect(client.setLoadpointAlwaysCharge).toHaveBeenLastCalledWith(1, "on");
+      expect(client.setLoadpointMode).toHaveBeenLastCalledWith(1, "smart");
+      await write(acc, CHARS.ChargeMode.uuid, "pv");
+      expect(client.setLoadpointAlwaysCharge).toHaveBeenLastCalledWith(1, "off");
+      expect(client.setLoadpointMode).toHaveBeenLastCalledWith(1, "smart");
+      // Always charge goes first, as in EVCC's own SetMode.
+      const ac = (client.setLoadpointAlwaysCharge as ReturnType<typeof vi.fn>).mock
+        .invocationCallOrder[0]!;
+      const mode = (client.setLoadpointMode as ReturnType<typeof vi.fn>).mock
+        .invocationCallOrder[0]!;
+      expect(ac).toBeLessThan(mode);
+      await write(acc, CHARS.ChargeMode.uuid, "now");
+      expect(client.setLoadpointMode).toHaveBeenLastCalledWith(1, "now");
+      expect(client.setLoadpointAlwaysCharge).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not change the mode when the always charge part of a legacy write fails", async () => {
+      const { acc, client } = build({ title: "Garage", mode: "smart", alwaysCharge: "off" });
+      (client.setLoadpointAlwaysCharge as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new Error("HTTP 500"),
+      );
+      await expect(write(acc, CHARS.ChargeMode.uuid, "minpv")).rejects.toMatchObject(
+        status(MockHAPStatus.SERVICE_COMMUNICATION_FAILURE),
+      );
+      expect(client.setLoadpointMode).not.toHaveBeenCalled();
+    });
+
+    it("forwards Always Charge writes to the EVCC alwayscharge endpoint", async () => {
+      const { acc, client } = build({ title: "Garage", mode: "smart", alwaysCharge: "off" });
+      await write(acc, CHARS.AlwaysCharge.uuid, true);
+      expect(client.setLoadpointAlwaysCharge).toHaveBeenLastCalledWith(1, "on");
+      await write(acc, CHARS.AlwaysCharge.uuid, false);
+      expect(client.setLoadpointAlwaysCharge).toHaveBeenLastCalledWith(1, "off");
+      expect(client.setLoadpointMode).not.toHaveBeenCalled();
+    });
+
+    it("validates Always Charge writes and refuses them where EVCC cannot apply them", async () => {
+      const { acc, client } = build({ title: "Garage", mode: "smart", alwaysCharge: "off" });
+      await expect(write(acc, CHARS.AlwaysCharge.uuid, "on")).rejects.toMatchObject(
+        status(MockHAPStatus.INVALID_VALUE_IN_REQUEST),
+      );
+      for (const state of [
+        { title: "Garage", mode: "pv" as const },
+        {
+          title: "Garage",
+          mode: "smart" as const,
+          alwaysCharge: "off" as const,
+          chargerFeatureSwitchDevice: true,
+        },
+      ]) {
+        const other = build(state);
+        await expect(write(other.acc, CHARS.AlwaysCharge.uuid, true)).rejects.toMatchObject(
+          status(MockHAPStatus.NOT_ALLOWED_IN_CURRENT_STATE),
+        );
+        expect(other.client.setLoadpointAlwaysCharge).not.toHaveBeenCalled();
+      }
+      const ro = build(
+        { title: "Garage", mode: "smart", alwaysCharge: "off" },
+        { writable: false },
+      );
+      await expect(write(ro.acc, CHARS.AlwaysCharge.uuid, true)).rejects.toMatchObject(
+        status(MockHAPStatus.INSUFFICIENT_PRIVILEGES),
+      );
+      (client.setLoadpointAlwaysCharge as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new Error("HTTP 400"),
+      );
+      await expect(write(acc, CHARS.AlwaysCharge.uuid, true)).rejects.toMatchObject(
+        status(MockHAPStatus.SERVICE_COMMUNICATION_FAILURE),
+      );
+    });
+
+    it("reads Always Charge and Min Current from EVCC", () => {
+      const { acc, lp } = build({
+        title: "Garage",
+        mode: "smart",
+        alwaysCharge: "once",
+        effectiveMinCurrent: 7,
+      });
+      const value = (uuid: string) => energySvc(acc).charMap.get(uuid)?.value;
+      expect(value(CHARS.AlwaysCharge.uuid)).toBe(true);
+      expect(value(CHARS.MinCurrent.uuid)).toBe(7);
+      lp.applyPartial("alwaysCharge", "off");
+      expect(value(CHARS.AlwaysCharge.uuid)).toBe(false);
     });
 
     it("rejects an invalid Charge Mode before calling EVCC", async () => {

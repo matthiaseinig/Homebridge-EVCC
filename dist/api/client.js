@@ -181,6 +181,10 @@ class EvccClient extends node_events_1.EventEmitter {
     async setLoadpointMode(loadpointId, mode) {
         await this.post(`/api/loadpoints/${loadpointId}/mode/${mode}`);
     }
+    /** EVCC 0.319: `POST /api/loadpoints/{id}/alwayscharge/{off|on}`. */
+    async setLoadpointAlwaysCharge(loadpointId, value) {
+        await this.post(`/api/loadpoints/${loadpointId}/alwayscharge/${value}`);
+    }
     async setLoadpointLimitSoc(loadpointId, soc) {
         await this.post(`/api/loadpoints/${loadpointId}/limitsoc/${Math.round(soc)}`);
     }
