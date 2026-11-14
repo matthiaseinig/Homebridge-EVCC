@@ -1,6 +1,13 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { isPrivateAddress } from "./config.js";
+import {
+  HELLO_OFF_WARNING,
+  HELLO_PATH,
+  HelloRateLimiter,
+  handleHello,
+  isHelloTokenStrong,
+} from "./hello.js";
 import type { ChargingSession } from "./model.js";
 import { parseCursor, type SessionStore, type TimeRange } from "./store.js";
 import { summarize, type SummaryPeriod } from "./summary.js";
@@ -14,6 +21,8 @@ export interface SessionsServerOptions {
   port: number;
   /** Required: the API is never served without a token. */
   token: string;
+  /** Receives the one-time warning when /v1/hello is off because the token is weak. */
+  warn?: (message: string) => void;
   store: SessionStore;
 }
 
@@ -70,8 +79,9 @@ function toApi(s: ChargingSession): Record<string, unknown> {
  * binds to one literal private or loopback address (never a wildcard),
  * refuses requests from non-private peers, accepts only
  * `Host: <bindAddress>:<port>` (421 otherwise, which stops DNS rebinding) and
- * always requires `Authorization: Bearer`.
+ * always requires `Authorization: Bearer`, except GET /v1/hello.
  *
+ *   GET /v1/hello?nonce=<43 base64url>   (no token: HMAC proof in X-Home-Proof, 30 per minute per peer; only with a random token of 32+ characters)
  *   GET /v1/status
  *   GET /v1/sessions?from&to&limit&cursor      from/to: YYYY-MM-DD or ISO time
  *   GET /v1/sessions/summary?period=month|year[&from&to]
@@ -79,12 +89,16 @@ function toApi(s: ChargingSession): Record<string, unknown> {
 export class SessionsServer {
   private server: Server | null = null;
   private allowedHost = "";
+  private readonly helloLimiter = new HelloRateLimiter();
+  private readonly helloEnabled: boolean;
 
   constructor(private readonly opts: SessionsServerOptions) {
     if (opts.bindAddress.includes("%") || !isPrivateAddress(opts.bindAddress)) {
       throw new Error("sessions API must bind to a private or loopback address");
     }
     if (!opts.token) throw new Error("sessions API needs a token");
+    this.helloEnabled = isHelloTokenStrong(opts.token);
+    if (!this.helloEnabled) opts.warn?.(HELLO_OFF_WARNING);
   }
 
   /** Resolves with the bound port (useful with port 0 in tests). */
@@ -132,6 +146,8 @@ export class SessionsServer {
       if ((req.headers.host ?? "").toLowerCase() !== this.allowedHost) {
         return this.send(res, 421, { error: "misdirected request" });
       }
+      if (new URL(req.url ?? "/", "http://localhost").pathname === HELLO_PATH)
+        return this.hello(req, res);
       if (req.method !== "GET") {
         res.setHeader("Allow", "GET");
         return this.send(res, 405, { error: "method not allowed" });
@@ -144,6 +160,33 @@ export class SessionsServer {
     } catch {
       this.send(res, 500, { error: "internal error" });
     }
+  }
+
+  /** Token-free proof of the real service; the only route without `Authorization`. */
+  private hello(req: IncomingMessage, res: ServerResponse): void {
+    if (!this.helloEnabled) return this.send(res, 404, { error: "not found" });
+    if (req.method !== "GET") {
+      res.setHeader("Allow", "GET");
+      return this.send(res, 405, { error: "method not allowed" });
+    }
+    const r = handleHello(
+      new URL(req.url ?? "/", "http://localhost").searchParams,
+      this.opts.token,
+      this.allowedHost,
+      this.helloLimiter,
+      req.socket.remoteAddress ?? "",
+      Date.now(),
+    );
+    if (r.status !== 204) {
+      if (r.status === 429) res.setHeader("Retry-After", "60");
+      return this.send(res, r.status, { error: r.error });
+    }
+    res.writeHead(204, {
+      "X-Home-Proof": r.proof,
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    });
+    res.end();
   }
 
   private range(q: URLSearchParams): TimeRange | string {

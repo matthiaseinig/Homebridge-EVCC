@@ -8,6 +8,12 @@ Version bumps and entries below are managed by
 [release-please](https://github.com/googleapis/release-please) on every push to
 `main`.
 
+## [1.3.1] - 2026-11-14
+
+### Added
+- `GET /v1/hello?nonce=<43 characters base64url, no padding>` on the sessions API: a proof route that needs no `Authorization` header, so the app can verify it reached the real home service before it sends its bearer token (for example over a VPN tunnel). Same peer and exact `Host` checks as the other routes. Answers 204 with `X-Home-Proof: base64url(HMAC-SHA256(key = API token, msg = "HOME-HELLO\n" + nonce + "\n" + <bindAddress>:<port>))` and `Cache-Control: no-store`; a bad nonce is 400, more than 30 requests per minute per peer is 429. Every other route still needs the token. The token and the proof are never logged.
+- The route is served only when the API token is at least 32 characters of hex or base64 characters, has at least 10 distinct characters and no run of more than 4 equal characters (generated tokens always qualify). Otherwise it answers 404 and one warning at start recommends deleting the API token file and restarting.
+
 ## [1.3.0] - 2026-11-11
 
 ### Added

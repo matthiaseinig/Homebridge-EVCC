@@ -177,6 +177,7 @@ export class SessionsService {
         bindAddress: api.bindAddress,
         port: api.port,
         token: token.token,
+        warn: (m) => log.warn("%s", m),
         store: this.store,
       });
       const port = await server.start();
