@@ -8,6 +8,7 @@ const chargingHistory_js_1 = require("../energy/chargingHistory.js");
 const loadpointEnergy_js_1 = require("../energy/loadpointEnergy.js");
 const applyServiceName_js_1 = require("../util/applyServiceName.js");
 const powerToLux_js_1 = require("../util/powerToLux.js");
+const redact_js_1 = require("../util/redact.js");
 const SUBTYPE_OUTLET = "outlet";
 const SUBTYPE_LIMIT_LP = "limit-loadpoint";
 const SUBTYPE_LIMIT_VEHICLE = "limit-vehicle";
@@ -358,7 +359,7 @@ class LoadpointAccessory {
                     await this.client.setVehiclePlanSoc(vehicle, request.soc, (0, writeValidation_js_1.toRfc3339)(request.time));
             }
             catch (err) {
-                this.log.warn("Failed to set plan for vehicle %s: %s", vehicle, err.message);
+                this.log.warn("Failed to set plan for vehicle %s: %s", vehicle, (0, redact_js_1.errorText)(err));
                 throw this.hapError("SERVICE_COMMUNICATION_FAILURE");
             }
         });
@@ -384,7 +385,7 @@ class LoadpointAccessory {
             await this.client.setLoadpointMode(this.loadpointId + 1, mode);
         }
         catch (err) {
-            this.log.warn("Failed to set loadpoint %d mode=%s: %s", this.loadpointId + 1, mode, err.message);
+            this.log.warn("Failed to set loadpoint %d mode=%s: %s", this.loadpointId + 1, mode, (0, redact_js_1.errorText)(err));
             throw this.hapError("SERVICE_COMMUNICATION_FAILURE");
         }
     }
@@ -393,7 +394,7 @@ class LoadpointAccessory {
             await this.client.setLoadpointLimitSoc(this.loadpointId + 1, soc);
         }
         catch (err) {
-            this.log.warn("Failed to set loadpoint %d limitSoc=%d: %s", this.loadpointId + 1, soc, err.message);
+            this.log.warn("Failed to set loadpoint %d limitSoc=%d: %s", this.loadpointId + 1, soc, (0, redact_js_1.errorText)(err));
             throw this.hapError("SERVICE_COMMUNICATION_FAILURE");
         }
     }
@@ -402,7 +403,7 @@ class LoadpointAccessory {
             await this.client.setVehicleLimitSoc(name, soc);
         }
         catch (err) {
-            this.log.warn("Failed to set vehicle %s limitSoc=%d: %s", name, soc, err.message);
+            this.log.warn("Failed to set vehicle %s limitSoc=%d: %s", name, soc, (0, redact_js_1.errorText)(err));
             throw this.hapError("SERVICE_COMMUNICATION_FAILURE");
         }
     }

@@ -118,6 +118,34 @@ describe("EvccPlatform — bootstrap", () => {
     });
   });
 
+  it("does not log URL credentials or the password from a start failure", async () => {
+    const log = createMockLogger();
+    const api = createMockApi();
+    const failingClient = {
+      start: vi.fn(async () => {
+        throw new Error("fetch failed: http://admin:pw-s3cret@evcc.local:7070/api/state");
+      }),
+      stop: vi.fn(),
+      on: vi.fn(),
+      getState: vi.fn(() => ({})),
+    } as unknown as EvccClient;
+    new EvccPlatform(
+      log,
+      { platform: "EVCC", name: "EVCC", url: "http://admin:pw-s3cret@evcc.local:7070", password: "pw-s3cret" },
+      api,
+      { client: failingClient },
+    );
+    api.emit("didFinishLaunching");
+    await vi.waitFor(() => expect(log.error).toHaveBeenCalled());
+    const logged = JSON.stringify([
+      (log.error as ReturnType<typeof vi.fn>).mock.calls,
+      (log.info as ReturnType<typeof vi.fn>).mock.calls,
+    ]);
+    expect(logged).toContain("Failed to reach");
+    expect(logged).not.toContain("pw-s3cret");
+    expect(logged).not.toContain("admin");
+  });
+
   it("disconnects the client on shutdown", async () => {
     const { api, log, client } = buildPlatform({ url: "http://evcc.local:7070" });
     api.emit("didFinishLaunching");

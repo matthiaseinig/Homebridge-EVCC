@@ -62,7 +62,7 @@ class EvccClient extends node_events_1.EventEmitter {
                 await this.login();
             }
             catch (err) {
-                this.log.warn("EVCC login failed (%s). Read-only mode will still work; settable HomeKit controls will be disabled.", err.message);
+                this.log.warn("EVCC login failed (%s). Read-only mode will still work; settable HomeKit controls will be disabled.", (0, redact_js_1.errorText)(err, this.password));
             }
         }
         await this.refreshState();
@@ -104,7 +104,7 @@ class EvccClient extends node_events_1.EventEmitter {
                 listener(...args);
             }
             catch (err) {
-                this.log.error("Listener for %s threw: %s", event, err.message);
+                this.log.error("Listener for %s threw: %s", event, (0, redact_js_1.errorText)(err, this.password));
             }
         }
     }
@@ -234,7 +234,7 @@ class EvccClient extends node_events_1.EventEmitter {
         this.pollTimer = setTimeout(() => {
             void this.refreshState()
                 .catch((err) => {
-                this.log.warn("EVCC poll failed: %s", err.message);
+                this.log.warn("EVCC poll failed: %s", (0, redact_js_1.errorText)(err, this.password));
             })
                 .finally(() => this.scheduleNextPoll());
         }, this.pollIntervalMs);
@@ -254,7 +254,7 @@ class EvccClient extends node_events_1.EventEmitter {
             socket = new this.webSocketCtor(wsUrl, { headers: this.authHeaders() });
         }
         catch (err) {
-            this.log.warn("EVCC WS construct failed: %s", err.message);
+            this.log.warn("EVCC WS construct failed: %s", (0, redact_js_1.errorText)(err, this.password));
             this.scheduleReconnect();
             return;
         }
@@ -286,7 +286,7 @@ class EvccClient extends node_events_1.EventEmitter {
             this.scheduleReconnect();
         });
         socket.on("error", (err) => {
-            this.log.warn("EVCC WS error: %s", err.message);
+            this.log.warn("EVCC WS error: %s", (0, redact_js_1.errorText)(err, this.password));
         });
     }
     scheduleReconnect() {

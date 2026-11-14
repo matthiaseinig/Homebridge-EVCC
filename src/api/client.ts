@@ -1,7 +1,7 @@
 import type { Logging } from "homebridge";
 import { EventEmitter } from "node:events";
 import WebSocket from "ws";
-import { describeSecret, redactUrl } from "../util/redact.js";
+import { describeSecret, redactUrl, errorText } from "../util/redact.js";
 import { applyUpdate, parseFrame } from "./decoders.js";
 import type { ChargeMode, EvccState, WebSocketUpdate } from "./types.js";
 
@@ -92,7 +92,7 @@ export class EvccClient extends EventEmitter {
       } catch (err) {
         this.log.warn(
           "EVCC login failed (%s). Read-only mode will still work; settable HomeKit controls will be disabled.",
-          (err as Error).message,
+          errorText(err, this.password),
         );
       }
     }
@@ -140,7 +140,7 @@ export class EvccClient extends EventEmitter {
       try {
         (listener as (...a: Parameters<EvccClientEvents[E]>) => unknown)(...args);
       } catch (err) {
-        this.log.error("Listener for %s threw: %s", event, (err as Error).message);
+        this.log.error("Listener for %s threw: %s", event, errorText(err, this.password));
       }
     }
   }
@@ -284,7 +284,7 @@ export class EvccClient extends EventEmitter {
     this.pollTimer = setTimeout(() => {
       void this.refreshState()
         .catch((err) => {
-          this.log.warn("EVCC poll failed: %s", (err as Error).message);
+          this.log.warn("EVCC poll failed: %s", errorText(err, this.password));
         })
         .finally(() => this.scheduleNextPoll());
     }, this.pollIntervalMs);
@@ -304,7 +304,7 @@ export class EvccClient extends EventEmitter {
     try {
       socket = new this.webSocketCtor(wsUrl, { headers: this.authHeaders() });
     } catch (err) {
-      this.log.warn("EVCC WS construct failed: %s", (err as Error).message);
+      this.log.warn("EVCC WS construct failed: %s", errorText(err, this.password));
       this.scheduleReconnect();
       return;
     }
@@ -340,7 +340,7 @@ export class EvccClient extends EventEmitter {
     });
 
     socket.on("error", (err: Error) => {
-      this.log.warn("EVCC WS error: %s", err.message);
+      this.log.warn("EVCC WS error: %s", errorText(err, this.password));
     });
   }
 

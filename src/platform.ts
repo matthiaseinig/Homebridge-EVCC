@@ -17,7 +17,7 @@ import { parseSessionsConfig } from "./sessions/config.js";
 import { SessionsService } from "./sessions/service.js";
 import { loadpointSummary } from "./sessions/summary.js";
 import { PLATFORM_NAME, PLUGIN_NAME } from "./settings.js";
-import { redactUrl } from "./util/redact.js";
+import { redactUrl, errorText } from "./util/redact.js";
 
 export interface EvccPlatformConfig extends PlatformConfig {
   /** Base URL of the EVCC instance, e.g. `http://evcc.local:7070`. */
@@ -153,7 +153,7 @@ export class EvccPlatform implements DynamicPlatformPlugin {
     } catch (err) {
       this.log.error(
         "Failed to reach EVCC: %s. The plugin will keep retrying in the background.",
-        (err as Error).message,
+        errorText(err, this.config.password),
       );
     }
     await this.sessions?.start();
