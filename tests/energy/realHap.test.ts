@@ -4,9 +4,10 @@
  * accepted by HAP without warnings and to survive the Homebridge accessory
  * cache round trip.
  */
-import * as hapNodejs from "hap-nodejs";
+import { createRequire } from "node:module";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import type { API, PlatformAccessory as PlatformAccessoryType, Service } from "homebridge";
-import { PlatformAccessory } from "homebridge/lib/platformAccessory.js";
 import { describe, expect, it } from "vitest";
 import { LoadpointAccessory } from "../../src/accessories/loadpointAccessory.js";
 import type { EvccClient } from "../../src/api/client.js";
@@ -20,14 +21,30 @@ import { LoadpointEnergyService } from "../../src/energy/loadpointEnergy.js";
 import { createMockLogger } from "../helpers/homebridge.js";
 import { FIXTURE_PLAN_EPOCH, energyFixture } from "./fixtures.js";
 
-const hap = hapNodejs as unknown as API["hap"];
+/**
+ * The real HomebridgeAPI is loaded from the installed homebridge package, so
+ * the test runs on Homebridge 1.x (lib/) and 2.x (dist/, no deep exports,
+ * bundles @homebridge/hap-nodejs).
+ */
+const homebridgeDir = path.dirname(createRequire(import.meta.url).resolve("homebridge"));
+const { HomebridgeAPI } = (await import(
+  pathToFileURL(path.join(homebridgeDir, "api.js")).href
+)) as {
+  HomebridgeAPI: new () => API;
+};
+const realApi = new HomebridgeAPI();
+const hap: API["hap"] = realApi.hap;
+const hapNodejs = hap;
+const PlatformAccessory = realApi.platformAccessory;
 const api = { hap } as unknown as API;
 
 function newAccessory(name: string): PlatformAccessoryType {
-  return new PlatformAccessory(
-    name,
-    hapNodejs.uuid.generate(`test-${name}`),
-  ) as unknown as PlatformAccessoryType;
+  const acc = new PlatformAccessory(name, hapNodejs.uuid.generate(`test-${name}`));
+  // Homebridge 2 refuses to serialize an accessory that no plugin has registered.
+  const reg = acc as unknown as { _associatedPlugin: string; _associatedPlatform: string };
+  reg._associatedPlugin = "homebridge-test";
+  reg._associatedPlatform = "TestPlatform";
+  return acc as unknown as PlatformAccessoryType;
 }
 
 const OWN_UUIDS = new Set<string>(Object.values(CHARS).map((c) => c.uuid));
@@ -39,8 +56,9 @@ const OWN_UUIDS = new Set<string>(Object.values(CHARS).map((c) => c.uuid));
  */
 function collectWarnings(acc: PlatformAccessoryType, ownOnly = false): string[] {
   const warnings: string[] = [];
-  const hapAccessory = (acc as unknown as { _associatedHAPAccessory: hapNodejs.Accessory })
-    ._associatedHAPAccessory;
+  const hapAccessory = (
+    acc as unknown as { _associatedHAPAccessory: InstanceType<API["hap"]["Accessory"]> }
+  )._associatedHAPAccessory;
   hapAccessory.on(hapNodejs.AccessoryEventTypes.CHARACTERISTIC_WARNING, (w) => {
     if (ownOnly && !OWN_UUIDS.has(w.characteristic.UUID)) return;
     warnings.push(`${w.type}: ${w.message}`);
