@@ -1,7 +1,7 @@
 {
   "displayName": "EVCC",
   "name": "homebridge-evcc",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "Homebridge plugin for the EVCC solar charging controller. Exposes loadpoints, vehicles, home battery, PV production, and grid power as native HomeKit accessories with a charge limit that apps can set and that Apple Home scenes cannot change.",
   "license": "MIT",
   "author": {
@@ -37,7 +37,8 @@
     "test:coverage": "vitest run --coverage",
     "dev": "npm run build && homebridge -U ./dev -P .",
     "preflight": "npm run lint && npm run build && npm run test:coverage && npm audit --omit=dev --audit-level=high",
-    "prepublishOnly": "npm run preflight"
+    "prepublishOnly": "npm run preflight",
+    "prepack": "npm run build"
   },
   "keywords": [
     "homebridge-plugin",

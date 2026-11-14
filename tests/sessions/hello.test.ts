@@ -1,6 +1,11 @@
 import { request as helloRequest } from "node:http";
 import { describe, expect, it } from "vitest";
-import { HelloRateLimiter, helloProof, isHelloTokenStrong } from "../../src/sessions/hello.js";
+import {
+  HelloRateLimiter,
+  MAX_TRACKED_PEERS,
+  helloProof,
+  isHelloTokenStrong,
+} from "../../src/sessions/hello.js";
 import { SessionsServer } from "../../src/sessions/server.js";
 import { SessionStore } from "../../src/sessions/store.js";
 import { tempDir } from "./fixtures.js";
@@ -170,5 +175,54 @@ describe("GET /v1/hello with a weak token", () => {
     } finally {
       await stop();
     }
+  });
+});
+
+describe("isHelloTokenStrong boundaries", () => {
+  const T32 = "Ab3dE6gH9jK2mN5pQ8sT1vW4yZ7cF0xR";
+  const HEX32 = "9f3ac27be41d58a26fd0b7c3e1a49d82";
+
+  it("needs 32 characters, not 31", () => {
+    expect(T32).toHaveLength(32);
+    expect(isHelloTokenStrong(T32)).toBe(true);
+    expect(isHelloTokenStrong(T32.slice(0, 31))).toBe(false);
+    expect(HEX32).toHaveLength(32);
+    expect(isHelloTokenStrong(HEX32)).toBe(true);
+    expect(isHelloTokenStrong(HEX32.slice(0, 31))).toBe(false);
+  });
+
+  it("needs 10 distinct characters, not 9", () => {
+    const ten = "01234567890123456789012345678901";
+    const nine = "01234567801234567801234567801234";
+    expect(ten).toHaveLength(32);
+    expect(new Set(ten).size).toBe(10);
+    expect(isHelloTokenStrong(ten)).toBe(true);
+    expect(nine).toHaveLength(32);
+    expect(new Set(nine).size).toBe(9);
+    expect(isHelloTokenStrong(nine)).toBe(false);
+  });
+
+  it("allows a run of 4 equal characters, not 5", () => {
+    expect(isHelloTokenStrong(`${T32.slice(0, 20)}aaaa${T32.slice(24)}`)).toBe(true);
+    expect(isHelloTokenStrong(`${T32.slice(0, 20)}aaaaa${T32.slice(25)}`)).toBe(false);
+  });
+});
+
+describe("HelloRateLimiter size cap", () => {
+  it("never tracks more than the fixed number of peers and evicts the oldest first", () => {
+    const limiter = new HelloRateLimiter();
+    for (let i = 0; i < 30; i++) limiter.allow("first", 1000);
+    expect(limiter.allow("first", 1000)).toBe(false);
+    for (let i = 0; i < MAX_TRACKED_PEERS * 3; i++) {
+      limiter.allow(`peer-${i}`, 1000);
+      expect(limiter.size).toBeLessThanOrEqual(MAX_TRACKED_PEERS);
+    }
+    expect(limiter.size).toBe(MAX_TRACKED_PEERS);
+    // "first" was evicted as the oldest, so it starts a fresh window.
+    expect(limiter.allow("first", 1000)).toBe(true);
+    // A recent peer is still tracked: its count carries on.
+    const last = `peer-${MAX_TRACKED_PEERS * 3 - 1}`;
+    for (let i = 0; i < 29; i++) limiter.allow(last, 1000);
+    expect(limiter.allow(last, 1000)).toBe(false);
   });
 });

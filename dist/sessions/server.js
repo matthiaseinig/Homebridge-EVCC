@@ -5,6 +5,7 @@ exports.parseBound = parseBound;
 const node_http_1 = require("node:http");
 const node_crypto_1 = require("node:crypto");
 const config_js_1 = require("./config.js");
+const hello_js_1 = require("./hello.js");
 const store_js_1 = require("./store.js");
 const summary_js_1 = require("./summary.js");
 /** Default and maximum page size of /v1/sessions. */
@@ -60,8 +61,9 @@ function toApi(s) {
  * binds to one literal private or loopback address (never a wildcard),
  * refuses requests from non-private peers, accepts only
  * `Host: <bindAddress>:<port>` (421 otherwise, which stops DNS rebinding) and
- * always requires `Authorization: Bearer`.
+ * always requires `Authorization: Bearer`, except GET /v1/hello.
  *
+ *   GET /v1/hello?nonce=<43 base64url>   (no token: HMAC proof in X-Home-Proof, 30 per minute per peer; only with a random token of 32+ characters)
  *   GET /v1/status
  *   GET /v1/sessions?from&to&limit&cursor      from/to: YYYY-MM-DD or ISO time
  *   GET /v1/sessions/summary?period=month|year[&from&to]
@@ -70,6 +72,8 @@ class SessionsServer {
     opts;
     server = null;
     allowedHost = "";
+    helloLimiter = new hello_js_1.HelloRateLimiter();
+    helloEnabled;
     constructor(opts) {
         this.opts = opts;
         if (opts.bindAddress.includes("%") || !(0, config_js_1.isPrivateAddress)(opts.bindAddress)) {
@@ -77,6 +81,9 @@ class SessionsServer {
         }
         if (!opts.token)
             throw new Error("sessions API needs a token");
+        this.helloEnabled = (0, hello_js_1.isHelloTokenStrong)(opts.token);
+        if (!this.helloEnabled)
+            opts.warn?.(hello_js_1.HELLO_OFF_WARNING);
     }
     /** Resolves with the bound port (useful with port 0 in tests). */
     start() {
@@ -121,6 +128,8 @@ class SessionsServer {
             if ((req.headers.host ?? "").toLowerCase() !== this.allowedHost) {
                 return this.send(res, 421, { error: "misdirected request" });
             }
+            if (new URL(req.url ?? "/", "http://localhost").pathname === hello_js_1.HELLO_PATH)
+                return this.hello(req, res);
             if (req.method !== "GET") {
                 res.setHeader("Allow", "GET");
                 return this.send(res, 405, { error: "method not allowed" });
@@ -134,6 +143,27 @@ class SessionsServer {
         catch {
             this.send(res, 500, { error: "internal error" });
         }
+    }
+    /** Token-free proof of the real service; the only route without `Authorization`. */
+    hello(req, res) {
+        if (!this.helloEnabled)
+            return this.send(res, 404, { error: "not found" });
+        if (req.method !== "GET") {
+            res.setHeader("Allow", "GET");
+            return this.send(res, 405, { error: "method not allowed" });
+        }
+        const r = (0, hello_js_1.handleHello)(new URL(req.url ?? "/", "http://localhost").searchParams, this.opts.token, this.allowedHost, this.helloLimiter, req.socket.remoteAddress ?? "", Date.now());
+        if (r.status !== 204) {
+            if (r.status === 429)
+                res.setHeader("Retry-After", "60");
+            return this.send(res, r.status, { error: r.error });
+        }
+        res.writeHead(204, {
+            "X-Home-Proof": r.proof,
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        });
+        res.end();
     }
     range(q) {
         const range = {};

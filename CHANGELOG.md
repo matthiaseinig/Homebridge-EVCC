@@ -8,6 +8,13 @@ Version bumps and entries below are managed by
 [release-please](https://github.com/googleapis/release-please) on every push to
 `main`.
 
+## [1.3.2] - 2026-11-14
+
+### Fixed
+- The committed `dist/` is rebuilt and `prepack` now runs `npm run build`: the previous tarball shipped a stale `dist/` without `/v1/hello`.
+- The hello rate limiter tracks at most 256 peers and evicts the oldest window first (it could grow without a bound before).
+- Boundary tests for the strong-token rule: 31 vs 32 characters, 9 vs 10 distinct characters, a run of 4 vs 5 equal characters.
+
 ## [1.3.1] - 2026-11-14
 
 ### Added

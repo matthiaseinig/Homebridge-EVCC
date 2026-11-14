@@ -8,7 +8,7 @@ const HELLO_PREFIX = "HOME-HELLO\n";
 
 export const HELLO_LIMIT_PER_MINUTE = 30;
 const WINDOW_MS = 60_000;
-const MAX_TRACKED_PEERS = 256;
+export const MAX_TRACKED_PEERS = 256;
 
 export const HELLO_OFF_WARNING =
   "GET /v1/hello is off: the API token is shorter than 32 characters or does not look random. " +
@@ -50,18 +50,30 @@ export class HelloRateLimiter {
 
   /** True when the request is within the limit; counts it either way. */
   allow(peer: string, nowMs: number): boolean {
+    const w = this.windows.get(peer);
+    if (w && nowMs - w.start < WINDOW_MS) {
+      w.count += 1;
+      return w.count <= this.limit;
+    }
+    this.windows.delete(peer);
     if (this.windows.size >= MAX_TRACKED_PEERS) {
-      for (const [key, w] of this.windows) {
-        if (nowMs - w.start >= WINDOW_MS) this.windows.delete(key);
+      for (const [key, old] of this.windows) {
+        if (nowMs - old.start >= WINDOW_MS) this.windows.delete(key);
       }
     }
-    const w = this.windows.get(peer);
-    if (!w || nowMs - w.start >= WINDOW_MS) {
-      this.windows.set(peer, { start: nowMs, count: 1 });
-      return true;
+    // Still full: evict the oldest windows (insertion order is window start order).
+    while (this.windows.size >= MAX_TRACKED_PEERS) {
+      const oldest = this.windows.keys().next();
+      if (oldest.done) break;
+      this.windows.delete(oldest.value);
     }
-    w.count += 1;
-    return w.count <= this.limit;
+    this.windows.set(peer, { start: nowMs, count: 1 });
+    return true;
+  }
+
+  /** Number of tracked peers (for tests). */
+  get size(): number {
+    return this.windows.size;
   }
 }
 
