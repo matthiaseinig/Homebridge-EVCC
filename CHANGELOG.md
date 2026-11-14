@@ -8,6 +8,21 @@ Version bumps and entries below are managed by
 [release-please](https://github.com/googleapis/release-please) on every push to
 `main`.
 
+## [1.2.1] - 2026-11-11
+
+### Fixed
+- `Charge Mode` (E5C00041) now passes through and accepts writes for every mode
+  EVCC 0.319 uses: `off`, `now`, `smart`, `minpv` and `pv` (source:
+  `api/chargemodestatus.go` in evcc-io/evcc; `minpv` and `pv` are deprecated
+  upstream and normalized to `smart`). Previously `smart` was rejected on write.
+  The characteristic is a free-form string, which HomeKit cannot constrain with
+  a valid-values list, so validation stays in the write handler.
+- Security: the debug log line "EVCC login" no longer prints the first and last
+  characters of the EVCC password; it logs only `configured` or `not configured`.
+  URLs written to the log (startup line, login, websocket) have any embedded
+  `user:password@` credentials removed. `redactSecret` was replaced by
+  `describeSecret` and `redactUrl`.
+
 ## [1.2.0] - 2026-11-10
 
 ### Fixed

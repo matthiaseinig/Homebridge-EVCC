@@ -1,7 +1,7 @@
 import type { Logging } from "homebridge";
 import { EventEmitter } from "node:events";
 import WebSocket from "ws";
-import { redactSecret } from "../util/redact.js";
+import { describeSecret, redactUrl } from "../util/redact.js";
 import { applyUpdate, parseFrame } from "./decoders.js";
 import type { ChargeMode, EvccState, WebSocketUpdate } from "./types.js";
 
@@ -151,7 +151,7 @@ export class EvccClient extends EventEmitter {
 
   private async login(): Promise<void> {
     const url = `${this.baseUrl}/api/auth/login`;
-    this.log.debug("EVCC login → %s (password=%s)", url, redactSecret(this.password));
+    this.log.debug("EVCC login → %s (password %s)", redactUrl(url), describeSecret(this.password));
     const res = await this.fetchImpl(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -299,7 +299,7 @@ export class EvccClient extends EventEmitter {
   private connectSocket(): void {
     if (this.stopped) return;
     const wsUrl = this.baseUrl.replace(/^http/, "ws") + "/ws";
-    this.log.debug("EVCC WebSocket → %s", wsUrl);
+    this.log.debug("EVCC WebSocket → %s", redactUrl(wsUrl));
     let socket: WebSocket;
     try {
       socket = new this.webSocketCtor(wsUrl, { headers: this.authHeaders() });
@@ -312,7 +312,7 @@ export class EvccClient extends EventEmitter {
 
     socket.on("open", () => {
       this.reconnectDelay = DEFAULT_RECONNECT_DELAY_MS;
-      this.log.info("Connected to EVCC websocket at %s", wsUrl);
+      this.log.info("Connected to EVCC websocket at %s", redactUrl(wsUrl));
       this.dispatch("connect");
     });
 

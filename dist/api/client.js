@@ -113,7 +113,7 @@ class EvccClient extends node_events_1.EventEmitter {
     // ---------------------------------------------------------------------------
     async login() {
         const url = `${this.baseUrl}/api/auth/login`;
-        this.log.debug("EVCC login → %s (password=%s)", url, (0, redact_js_1.redactSecret)(this.password));
+        this.log.debug("EVCC login → %s (password %s)", (0, redact_js_1.redactUrl)(url), (0, redact_js_1.describeSecret)(this.password));
         const res = await this.fetchImpl(url, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -248,7 +248,7 @@ class EvccClient extends node_events_1.EventEmitter {
         if (this.stopped)
             return;
         const wsUrl = this.baseUrl.replace(/^http/, "ws") + "/ws";
-        this.log.debug("EVCC WebSocket → %s", wsUrl);
+        this.log.debug("EVCC WebSocket → %s", (0, redact_js_1.redactUrl)(wsUrl));
         let socket;
         try {
             socket = new this.webSocketCtor(wsUrl, { headers: this.authHeaders() });
@@ -261,7 +261,7 @@ class EvccClient extends node_events_1.EventEmitter {
         this.socket = socket;
         socket.on("open", () => {
             this.reconnectDelay = exports.DEFAULT_RECONNECT_DELAY_MS;
-            this.log.info("Connected to EVCC websocket at %s", wsUrl);
+            this.log.info("Connected to EVCC websocket at %s", (0, redact_js_1.redactUrl)(wsUrl));
             this.dispatch("connect");
         });
         socket.on("message", (raw) => {
