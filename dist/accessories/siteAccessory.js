@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SiteAccessory = void 0;
+const chargingStatistics_js_1 = require("../energy/chargingStatistics.js");
+const siteEnergy_js_1 = require("../energy/siteEnergy.js");
 const applyServiceName_js_1 = require("../util/applyServiceName.js");
 const powerToLux_js_1 = require("../util/powerToLux.js");
 const SUBTYPE_BATTERY = "home-battery";
@@ -26,6 +28,9 @@ const BATTERY_MODE_SUBTYPES = {
  *   - ContactSensor     "Grid Direction"      open = importing, closed = exporting (grid.power < 0)
  *   - LightSensor       "Home Consumption"    lux = homePower
  *   - Switch ×3         "Battery Normal/Hold/Charge"  (only if writable)
+ *   - Custom site energy services (Energy Site, PV Array, Aux Meter) and
+ *     "Charging Statistics" services, read-only, unless disabled
+ *     (see SiteEnergyServices, ChargingStatisticsServices)
  */
 class SiteAccessory {
     api;
@@ -40,6 +45,9 @@ class SiteAccessory {
     gridDirectionService;
     homeService;
     modeSwitches = new Map();
+    energy;
+    statistics;
+    energyEnabled;
     constructor(deps) {
         this.api = deps.api;
         this.log = deps.log;
@@ -54,9 +62,18 @@ class SiteAccessory {
         this.configureHome();
         if (this.writable)
             this.configureBatteryModeSwitches();
-        this.applyState(this.state);
+        this.energyEnabled = deps.energy ?? true;
+        this.energy = new siteEnergy_js_1.SiteEnergyServices(this.api, this.accessory, deps.now);
+        this.statistics = new chargingStatistics_js_1.ChargingStatisticsServices(this.api, this.accessory);
+        if (!this.energyEnabled) {
+            this.energy.removeAll();
+            this.statistics.removeAll();
+        }
+        // The platform constructs this accessory from a full REST snapshot.
+        this.applyState(this.state, true);
     }
-    applyState(state) {
+    /** Re-render from `state`; `snapshot` is true for a full REST snapshot. */
+    applyState(state, snapshot = false) {
         this.state = state;
         const C = this.api.hap.Characteristic;
         const battery = state.battery ?? {};
@@ -93,6 +110,15 @@ class SiteAccessory {
         for (const [m, svc] of this.modeSwitches) {
             svc.updateCharacteristic(C.On, mode === m);
         }
+        if (this.energyEnabled) {
+            this.energy.apply(state, snapshot);
+            this.statistics.apply(state, snapshot);
+        }
+    }
+    /** EVCC data arrived that does not touch site values (a loadpoint frame): move Last Update. */
+    touch() {
+        if (this.energyEnabled)
+            this.energy.touch();
     }
     dispose() {
         // Nothing to detach.
@@ -136,6 +162,7 @@ class SiteAccessory {
                 }
                 catch (err) {
                     this.log.warn("Failed to set battery mode %s: %s", mode, err.message);
+                    throw new this.api.hap.HapStatusError(-70402 /* this.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE */);
                 }
             });
         }

@@ -1,6 +1,8 @@
 import type { API, Logging, PlatformAccessory, Service, WithUUID } from "homebridge";
 import type { EvccClient } from "../api/client.js";
 import type { BatteryMode, EvccState } from "../api/types.js";
+import { ChargingStatisticsServices } from "../energy/chargingStatistics.js";
+import { SiteEnergyServices } from "../energy/siteEnergy.js";
 import { applyServiceName } from "../util/applyServiceName.js";
 import { clampPercent, powerToLux } from "../util/powerToLux.js";
 
@@ -12,6 +14,10 @@ export interface SiteAccessoryDeps {
   state: EvccState;
   /** Whether write-back to EVCC is allowed. Controls the battery-mode switches. */
   writable: boolean;
+  /** Expose the read-only custom site energy and charging statistics services (docs/zuhause-contract.md). Default true. */
+  energy?: boolean;
+  /** Clock for the Last Update characteristic; injectable for tests. */
+  now?: () => number;
 }
 
 const SUBTYPE_BATTERY = "home-battery";
@@ -39,6 +45,9 @@ const BATTERY_MODE_SUBTYPES: Record<Exclude<BatteryMode, "unknown">, string> = {
  *   - ContactSensor     "Grid Direction"      open = importing, closed = exporting (grid.power < 0)
  *   - LightSensor       "Home Consumption"    lux = homePower
  *   - Switch ×3         "Battery Normal/Hold/Charge"  (only if writable)
+ *   - Custom site energy services (Energy Site, PV Array, Aux Meter) and
+ *     "Charging Statistics" services, read-only, unless disabled
+ *     (see SiteEnergyServices, ChargingStatisticsServices)
  */
 export class SiteAccessory {
   private readonly api: API;
@@ -54,6 +63,9 @@ export class SiteAccessory {
   private gridDirectionService?: Service;
   private homeService?: Service;
   private readonly modeSwitches = new Map<Exclude<BatteryMode, "unknown">, Service>();
+  private readonly energy: SiteEnergyServices;
+  private readonly statistics: ChargingStatisticsServices;
+  private readonly energyEnabled: boolean;
 
   constructor(deps: SiteAccessoryDeps) {
     this.api = deps.api;
@@ -70,10 +82,20 @@ export class SiteAccessory {
     this.configureHome();
     if (this.writable) this.configureBatteryModeSwitches();
 
-    this.applyState(this.state);
+    this.energyEnabled = deps.energy ?? true;
+    this.energy = new SiteEnergyServices(this.api, this.accessory, deps.now);
+    this.statistics = new ChargingStatisticsServices(this.api, this.accessory);
+    if (!this.energyEnabled) {
+      this.energy.removeAll();
+      this.statistics.removeAll();
+    }
+
+    // The platform constructs this accessory from a full REST snapshot.
+    this.applyState(this.state, true);
   }
 
-  applyState(state: EvccState): void {
+  /** Re-render from `state`; `snapshot` is true for a full REST snapshot. */
+  applyState(state: EvccState, snapshot = false): void {
     this.state = state;
     const C = this.api.hap.Characteristic;
     const battery = state.battery ?? {};
@@ -126,6 +148,16 @@ export class SiteAccessory {
     for (const [m, svc] of this.modeSwitches) {
       svc.updateCharacteristic(C.On, mode === m);
     }
+
+    if (this.energyEnabled) {
+      this.energy.apply(state, snapshot);
+      this.statistics.apply(state, snapshot);
+    }
+  }
+
+  /** EVCC data arrived that does not touch site values (a loadpoint frame): move Last Update. */
+  touch(): void {
+    if (this.energyEnabled) this.energy.touch();
   }
 
   dispose(): void {
@@ -198,6 +230,9 @@ export class SiteAccessory {
           await this.client.setBatteryMode(mode);
         } catch (err) {
           this.log.warn("Failed to set battery mode %s: %s", mode, (err as Error).message);
+          throw new this.api.hap.HapStatusError(
+            this.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE,
+          );
         }
       });
     }

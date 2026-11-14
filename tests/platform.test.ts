@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EvccClient } from "../src/api/client.js";
+import { CHARS, SERVICES } from "../src/energy/definitions.js";
 import { EvccPlatform } from "../src/platform.js";
+import { energyFixture } from "./energy/fixtures.js";
 import {
   MockPlatformAccessory,
   asPlatformAccessory,
@@ -27,6 +29,7 @@ interface BuildOpts {
   hideVehiclePresence?: boolean;
   loadpointMode?: "outlet" | "switches" | "readonly";
   exposeVehicleLimit?: boolean;
+  hideEnergyCharacteristics?: boolean;
   initialState?: Record<string, unknown>;
 }
 
@@ -61,6 +64,7 @@ function buildPlatform(opts: BuildOpts = {}) {
       hideVehiclePresence: opts.hideVehiclePresence,
       loadpointMode: opts.loadpointMode,
       exposeVehicleLimit: opts.exposeVehicleLimit,
+      hideEnergyCharacteristics: opts.hideEnergyCharacteristics,
     },
     api,
     { client },
@@ -295,5 +299,68 @@ describe("EvccPlatform — adoption", () => {
     const occ2 = ev2.services.find((s) => s.UUID === "OccupancySensor")!;
     expect(occ1.getCharacteristic("OccupancyDetected").value).toBe(0);
     expect(occ2.getCharacteristic("OccupancyDetected").value).toBe(1);
+  });
+});
+
+describe("EvccPlatform: energy characteristics", () => {
+  function service(platform: EvccPlatform, kind: string, uuid: string, subtype?: string) {
+    const acc = platform.accessories.find((a) => a.context.kind === kind) as unknown as
+      | MockPlatformAccessory
+      | undefined;
+    return acc?.services.find((s) => s.UUID === uuid && (!subtype || s.subtype === subtype));
+  }
+
+  it("reads the older { result: ... } wrapper and follows websocket diffs", async () => {
+    const { api, platform } = buildPlatform({
+      url: "http://evcc.local:7070",
+      initialState: { result: energyFixture() },
+    });
+    api.emit("didFinishLaunching");
+    await vi.waitFor(() =>
+      expect(service(platform, "loadpoint", SERVICES.LoadpointEnergy.uuid)).toBeDefined(),
+    );
+    const lp = service(platform, "loadpoint", SERVICES.LoadpointEnergy.uuid)!;
+    const total = service(platform, "site", SERVICES.ChargingStatistics.uuid, "stat:total")!;
+    expect(lp.getCharacteristic(CHARS.TodayEnergy.uuid).value).toBe(7.65);
+    expect(total.getCharacteristic(CHARS.StatChargedEnergy.uuid).value).toBe(4000.25);
+
+    const ws = MockWebSocket.instances[0];
+    ws.simulateOpen();
+    const site = service(platform, "site", SERVICES.EnergySite.uuid)!;
+    ws.simulateMessage({
+      grid: { power: 640.04, powers: [200, 220, 220.04], currents: [0.9, 1, 1] },
+      homePower: 1800,
+    });
+    expect(site.getCharacteristic(CHARS.GridPower.uuid).value).toBe(640);
+    expect(site.getCharacteristic(CHARS.GridPowerL3.uuid).value).toBe(220);
+    expect(site.getCharacteristic(CHARS.HomePower.uuid).value).toBe(1800);
+
+    // A loadpoint-only frame moves the site's Last Update too.
+    site.getCharacteristic(CHARS.LastUpdate.uuid).updateValue(0);
+    ws.simulateMessage({ "loadpoints.0.chargePower": 0, "loadpoints.0.charging": false });
+    expect(site.getCharacteristic(CHARS.LastUpdate.uuid).value).toBeGreaterThan(0);
+    expect(site.getCharacteristic(CHARS.HomePower.uuid).value).toBe(1800);
+    ws.simulateMessage({ statistics: { total: { chargedKWh: 4002 } } });
+    expect(lp.getCharacteristic(CHARS.ChargePower.uuid).value).toBe(0);
+    expect(lp.getCharacteristic(CHARS.Charging.uuid).value).toBe(false);
+    expect(total.getCharacteristic(CHARS.StatChargedEnergy.uuid).value).toBe(4002);
+    // A websocket frame without the 30d period does not remove its service.
+    expect(service(platform, "site", SERVICES.ChargingStatistics.uuid, "stat:30d")).toBeDefined();
+  });
+
+  it("hideEnergyCharacteristics keeps the classic services and skips the custom ones", async () => {
+    const { api, platform } = buildPlatform({
+      url: "http://evcc.local:7070",
+      hideEnergyCharacteristics: true,
+      initialState: energyFixture() as unknown as Record<string, unknown>,
+    });
+    api.emit("didFinishLaunching");
+    await vi.waitFor(() =>
+      expect(platform.accessories.filter((a) => a.context.kind === "loadpoint")).toHaveLength(1),
+    );
+    expect(service(platform, "site", SERVICES.ChargingStatistics.uuid)).toBeUndefined();
+    expect(service(platform, "site", SERVICES.EnergySite.uuid)).toBeUndefined();
+    expect(service(platform, "loadpoint", SERVICES.LoadpointEnergy.uuid)).toBeUndefined();
+    expect(service(platform, "site", "LightSensor")).toBeDefined();
   });
 });
