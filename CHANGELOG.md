@@ -8,6 +8,38 @@ Version bumps and entries below are managed by
 [release-please](https://github.com/googleapis/release-please) on every push to
 `main`.
 
+## [1.3.0](https://github.com/matthiaseinig/Homebridge-EVCC/compare/v1.2.0...v1.3.0) (2026-11-14)
+
+
+### Features
+
+* **accessories:** pin service names against iOS pairing-dialog overwrites ([78175ad](https://github.com/matthiaseinig/Homebridge-EVCC/commit/78175ad362a24f9a1013a66386028da6ebeece3d))
+* Always Charge characteristic for EVCC 0.319 smart mode (1.3.0) ([1f9714c](https://github.com/matthiaseinig/Homebridge-EVCC/commit/1f9714c6e2320fdc02a6ba55d29d4ecb2adf0e43))
+* Always Charge characteristic for EVCC 0.319 smart mode (1.3.0) ([d891048](https://github.com/matthiaseinig/Homebridge-EVCC/commit/d8910485ea27df61c3aca882946a6fba05db7909))
+* charging history from EVCC's session log (v1.1.0); charge limit off window coverings (v1.2.0) ([fc66426](https://github.com/matthiaseinig/Homebridge-EVCC/commit/fc66426745fe955c30157895443c6e7ed7b10250))
+* charging history from EVCC's session log, with HomeKit summaries and a LAN API ([1f18f13](https://github.com/matthiaseinig/Homebridge-EVCC/commit/1f18f130b81b9bd36423f2e04b5c6f9d2a08b7d6))
+* EVCC energy and charging characteristics with charge mode and plan writes ([4d8a2e7](https://github.com/matthiaseinig/Homebridge-EVCC/commit/4d8a2e7f34d2e7a64806ad08e931fee88ccde4ea))
+* expose EVCC energy data as read-only custom HomeKit characteristics ([6a4d84f](https://github.com/matthiaseinig/Homebridge-EVCC/commit/6a4d84fe9e39436836793af394db6d2e4913da1d))
+* initial release of homebridge-evcc ([ef8dd8d](https://github.com/matthiaseinig/Homebridge-EVCC/commit/ef8dd8dc17e5f15b18e69cb16f207f5574e12532))
+* restore site energy, add charge mode and plan writes, report write errors ([aabe56d](https://github.com/matthiaseinig/Homebridge-EVCC/commit/aabe56d3fcc5d61e1e6f963b23004028a8856f89))
+* token-free GET /v1/hello proof route, only for a strong token (1.3.1) ([6019c67](https://github.com/matthiaseinig/Homebridge-EVCC/commit/6019c676c677856851ad85b29c51c41ef9d2e95f))
+* token-free GET /v1/hello proof route, ship it in the tarball (1.3.1, 1.3.2) ([b005101](https://github.com/matthiaseinig/Homebridge-EVCC/commit/b005101a1561204fe4779501f9121847b2db2a14))
+
+
+### Bug Fixes
+
+* accept the smart charge mode and stop logging password fragments (1.2.1) ([5b2b1ca](https://github.com/matthiaseinig/Homebridge-EVCC/commit/5b2b1ca3cb5dfea08827f0e44202697cb494d0ff))
+* accept the smart charge mode, stop logging password fragments (1.2.1) ([23eccf5](https://github.com/matthiaseinig/Homebridge-EVCC/commit/23eccf57cf8439fed9b0e78c09065946de604c88))
+* charge limit is no longer a window covering, so blinds scenes cannot change it (1.2.0) ([2bf0b31](https://github.com/matthiaseinig/Homebridge-EVCC/commit/2bf0b31b2064f0923a058b562fa1451ebd83bd1b))
+* **deps:** bump ws to 8.22.0 (GHSA-58qx-3vcg-4xpx, GHSA-96hv-2xvq-fx4p) ([3d10e89](https://github.com/matthiaseinig/Homebridge-EVCC/commit/3d10e89a6f3d1f63985b57aa0317d5280c081117))
+* **deps:** bump ws to 8.22.0 in the lockfile ([3abf506](https://github.com/matthiaseinig/Homebridge-EVCC/commit/3abf5069e8e130cdb3f9abc5a0652074bb3cbad1))
+* **install:** ship pre-built dist and drop prepare hook ([c333226](https://github.com/matthiaseinig/Homebridge-EVCC/commit/c333226a9cced8d1bd0533d620103653adaeef33))
+* **loader:** emit CommonJS so Homebridge can require() the plugin ([8089ab5](https://github.com/matthiaseinig/Homebridge-EVCC/commit/8089ab5337afc50c37cd56be27c42c645adbb91b))
+* redact URL credentials and the password from logged error texts (1.2.2) ([4b24f68](https://github.com/matthiaseinig/Homebridge-EVCC/commit/4b24f68baaa01465031a14406b235bc1033f8ea5))
+* redact URL credentials and the password from logged error texts (1.2.2) ([2768b4a](https://github.com/matthiaseinig/Homebridge-EVCC/commit/2768b4abde095fd0a715684bf2920c995c710182))
+* sessions store never overwrites an unreadable file, digest token compare, stop during start, zoned bind addresses ([f2c8eb7](https://github.com/matthiaseinig/Homebridge-EVCC/commit/f2c8eb7d18f8f600acc0d8761190bc129352c099))
+* ship /v1/hello in the tarball, cap the limiter, boundary tests (1.3.2) ([14e87bd](https://github.com/matthiaseinig/Homebridge-EVCC/commit/14e87bd2fb99a48ce03c6ef2abd114ed228c51cd))
+
 ## [1.3.2] - 2026-11-14
 
 ### Fixed
