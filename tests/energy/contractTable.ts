@@ -1,5 +1,5 @@
 /**
- * Renders the tables of docs/zuhause-contract.md from src/energy/definitions.ts.
+ * Renders the tables of docs/app-contract.md from src/energy/definitions.ts.
  * The contract test compares the document with this rendering row by row, so
  * any drift in UUID, name, format, unit, range, resolution, sign note, source
  * or service membership fails the build.

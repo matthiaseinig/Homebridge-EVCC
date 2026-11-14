@@ -201,6 +201,7 @@ describe("loadpointValues", () => {
       PlanActive: false,
       LoadpointLastUpdate: 1_900_000_000,
       SetPlan: `90,${FIXTURE_PLAN_EPOCH}`,
+      ChargeLimit: 80,
     });
   });
 

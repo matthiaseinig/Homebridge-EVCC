@@ -8,6 +8,46 @@ Version bumps and entries below are managed by
 [release-please](https://github.com/googleapis/release-please) on every push to
 `main`.
 
+## [1.2.0] - 2026-11-10
+
+### Fixed
+- An Apple Home scene or a Siri request such as "close all blinds" could change
+  the car's charge limit, because the limit was a `WindowCovering` and HomeKit
+  writes are on. The limit window coverings (`limit-loadpoint`, and
+  `limit-vehicle` with `exposeVehicleLimit`) are now off by default and are
+  removed from accessories restored from the Homebridge cache.
+
+### Added
+- `Charge Limit` characteristic (`E5C00051-...`) on the `Loadpoint Energy`
+  service: reads `limitSoc`, accepts an integer 0 to 100 (0 clears the session
+  limit) and forwards it to `POST /api/loadpoints/{id}/limitsoc/{value}`. The
+  Apple Home app ignores it, so no Home app scene can reach it.
+- `limitWindowCovering` option (default `false`) that brings the old blinds
+  slider back for users who accept the scene risk. `exposeVehicleLimit` now
+  needs it and logs a warning without it.
+
+### Migration
+- Not a re-pair. The charge-limit tile disappears from the Home app; scenes
+  and automations that contained it lose that one action. Check "close all
+  blinds" style scenes once after the update. Apps switch to `Charge Limit`
+  (docs/app-contract.md).
+
+## [1.1.0] - 2026-11-10
+
+### Added
+- Charging history: the plugin polls EVCC's session log (`GET /api/sessions`,
+  read only) every 10 minutes and once after a loadpoint stops charging or is
+  unplugged, and stores a bounded copy in the Homebridge storage folder
+  (`evcc-sessions.json`, 0600, atomic writes).
+- `Charging History` HomeKit service on each loadpoint (`E5C10006-...`) with
+  charged kWh today and this month, solar share this month, and the last
+  session's kWh and end time (characteristics `E5C00080` to `E5C00085`).
+- Optional read-only LAN API for the session log (`/v1/status`,
+  `/v1/sessions`, `/v1/sessions/summary`), off by default, private bind
+  address, Host check, mandatory bearer token (generated into the storage
+  folder when not configured). Default port 8768.
+- `sessions` config block (`enabled`, `maxSessions`, `api`).
+
 ## [1.0.1] - 2026-05-05
 
 ### Added

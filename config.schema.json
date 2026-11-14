@@ -60,11 +60,20 @@
           "functionBody": "return model.loadpointMode === 'outlet' || !model.loadpointMode;"
         }
       },
-      "exposeVehicleLimit": {
-        "title": "Also expose the assigned vehicle's charge limit",
+      "limitWindowCovering": {
+        "title": "Legacy: show the charge limit as blinds in the Home app",
         "type": "boolean",
         "default": false,
-        "description": "Adds a second WindowCovering per loadpoint that drives the *vehicle's* limitSoc (follows the car wherever it plugs in). Off by default — the loadpoint limit is usually what you want."
+        "description": "Adds the old WindowCovering slider for the charge limit. Leave this off: Apple Home scenes and Siri requests such as 'close all blinds' write every window covering and would change your car's charge limit. Apps set the limit through the custom Charge Limit characteristic."
+      },
+      "exposeVehicleLimit": {
+        "title": "Legacy: also expose the assigned vehicle's charge limit",
+        "type": "boolean",
+        "default": false,
+        "description": "Only with the legacy blinds option above: adds a second WindowCovering per loadpoint that drives the *vehicle's* limitSoc (follows the car wherever it plugs in). Off by default; the loadpoint limit is usually what you want.",
+        "condition": {
+          "functionBody": "return model.limitWindowCovering === true;"
+        }
       },
       "hideSite": {
         "title": "Hide site telemetry accessory",
@@ -76,13 +85,75 @@
         "title": "Hide energy and charging characteristics for apps",
         "type": "boolean",
         "default": false,
-        "description": "Suppress the custom energy and charging services (site energy, PV arrays, aux meters, loadpoint energy, charging statistics) and the control tags. The Apple Home app ignores them; they are for apps that read HomeKit directly. See docs/zuhause-contract.md."
+        "description": "Suppress the custom energy and charging services (site energy, PV arrays, aux meters, loadpoint energy, charging statistics) and the control tags. The Apple Home app ignores them; they are for apps that read HomeKit directly. See docs/app-contract.md."
       },
       "hideVehiclePresence": {
         "title": "Hide per-vehicle presence sensors",
         "type": "boolean",
         "default": false,
         "description": "Suppress the per-vehicle OccupancySensor accessories. Useful if you only have one car and don't need a dedicated 'is plugged in' sensor."
+      },
+      "sessions": {
+        "title": "Charging history",
+        "type": "object",
+        "description": "Keeps a copy of EVCC's session log and shows summaries per loadpoint. The optional LAN API is off by default.",
+        "properties": {
+          "enabled": {
+            "title": "Keep the charging history",
+            "type": "boolean",
+            "default": true,
+            "description": "Poll EVCC's session log every 10 minutes and show the Charging History service on each loadpoint."
+          },
+          "maxSessions": {
+            "title": "Maximum stored sessions",
+            "type": "integer",
+            "default": 5000,
+            "minimum": 100,
+            "maximum": 50000,
+            "description": "The oldest sessions are dropped beyond this number."
+          },
+          "api": {
+            "title": "LAN API",
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "title": "Enable the read-only LAN API",
+                "type": "boolean",
+                "default": false,
+                "description": "Serves the session list and totals to apps on your home network. Needs a bind address."
+              },
+              "bindAddress": {
+                "title": "Bind address",
+                "type": "string",
+                "placeholder": "192.168.1.10",
+                "description": "Literal private or loopback IP address of this Homebridge host. 0.0.0.0 and host names are not accepted.",
+                "condition": {
+                  "functionBody": "return model.sessions && model.sessions.api && model.sessions.api.enabled === true;"
+                }
+              },
+              "port": {
+                "title": "Port",
+                "type": "integer",
+                "default": 8768,
+                "minimum": 1024,
+                "maximum": 65535,
+                "description": "Port of the LAN API.",
+                "condition": {
+                  "functionBody": "return model.sessions && model.sessions.api && model.sessions.api.enabled === true;"
+                }
+              },
+              "token": {
+                "title": "Bearer token (optional)",
+                "type": "string",
+                "format": "password",
+                "description": "At least 16 characters. Leave empty to generate one into the file evcc-sessions-token in the Homebridge storage folder.",
+                "condition": {
+                  "functionBody": "return model.sessions && model.sessions.api && model.sessions.api.enabled === true;"
+                }
+              }
+            }
+          }
+        }
       },
       "debug": {
         "title": "Verbose logging",

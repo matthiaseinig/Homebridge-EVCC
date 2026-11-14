@@ -128,6 +128,7 @@ function loadpointValues(lp, nowSeconds) {
         PlanActive: (0, sanitize_js_1.bool)(lp.planActive),
         LoadpointLastUpdate: nowSeconds,
         SetPlan: formatPlan(planTime, planSoc),
+        ChargeLimit: (0, sanitize_js_1.num)(lp.limitSoc),
     };
 }
 //# sourceMappingURL=extract.js.map

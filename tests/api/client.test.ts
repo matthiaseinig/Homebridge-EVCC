@@ -1,11 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EvccClient } from "../../src/api/client.js";
 import { createMockLogger } from "../helpers/homebridge.js";
-import {
-  MockWebSocket,
-  createMockFetch,
-  getWebSocketCtor,
-} from "../helpers/mockEvcc.js";
+import { MockWebSocket, createMockFetch, getWebSocketCtor } from "../helpers/mockEvcc.js";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -60,6 +56,65 @@ describe("EvccClient.refreshState", () => {
   });
 });
 
+describe("EvccClient.getSessions", () => {
+  const list = [{ id: 1, created: "2026-03-10T08:00:00Z" }];
+
+  it("reads the bare list with GET and no body", async () => {
+    const { client, fetch } = buildClient();
+    fetch.push("/api/sessions", { body: list });
+    expect(await client.getSessions()).toEqual(list);
+    expect(fetch.calls).toHaveLength(1);
+    expect(fetch.calls[0].url).toBe("http://evcc.local:7070/api/sessions");
+    expect(fetch.calls[0].init?.method).toBeUndefined();
+    expect(fetch.calls[0].init?.body).toBeUndefined();
+  });
+
+  it("unwraps the {result: ...} envelope", async () => {
+    const { client, fetch } = buildClient();
+    fetch.push("/api/sessions", { body: { result: list } });
+    expect(await client.getSessions()).toEqual(list);
+  });
+
+  it("throws on an HTTP error and on a payload that is no list", async () => {
+    const { client, fetch } = buildClient();
+    fetch.push("/api/sessions", { status: 401, body: {} });
+    await expect(client.getSessions()).rejects.toThrow("GET /api/sessions HTTP 401");
+    fetch.push("/api/sessions", { body: { error: "x" } });
+    await expect(client.getSessions()).rejects.toThrow("no list");
+    fetch.push("/api/sessions", { body: null });
+    await expect(client.getSessions()).rejects.toThrow("no list");
+  });
+
+  it("logs in first when a password is set, sends the cookie and logs in again after it expires", async () => {
+    const { client, fetch } = buildClient({ password: "pw" });
+    fetch.push("/api/auth/login", { headers: { "set-cookie": "auth=ABC; Path=/" } });
+    fetch.push("/api/sessions", { body: list });
+    await client.getSessions();
+    expect(fetch.calls.map((c) => c.url)).toEqual([
+      "http://evcc.local:7070/api/auth/login",
+      "http://evcc.local:7070/api/sessions",
+    ]);
+    expect((fetch.calls[1].init?.headers as Record<string, string>).Cookie).toBe("auth=ABC");
+
+    fetch.push("/api/sessions", { body: list });
+    await client.getSessions();
+    expect(fetch.calls).toHaveLength(3);
+
+    vi.advanceTimersByTime(61 * 60 * 1000);
+    fetch.push("/api/auth/login", { headers: { "set-cookie": "auth=DEF; Path=/" } });
+    fetch.push("/api/sessions", { body: list });
+    await client.getSessions();
+    expect(fetch.calls[3].url).toContain("/api/auth/login");
+  });
+
+  it("still tries the request when the login fails", async () => {
+    const { client, fetch } = buildClient({ password: "pw" });
+    fetch.push("/api/auth/login", { status: 500 });
+    fetch.push("/api/sessions", { body: list });
+    expect(await client.getSessions()).toEqual(list);
+  });
+});
+
 describe("EvccClient login + writes", () => {
   it("sends the password and stores the auth cookie on login", async () => {
     const { client, fetch } = buildClient({ password: "secret" });
@@ -84,7 +139,10 @@ describe("EvccClient login + writes", () => {
     fetch.push("/api/auth/login", { status: 401 });
     fetch.push("/api/state", { body: { pvPower: 0 } });
     await client.start();
-    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining("login failed"), expect.any(String));
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.stringContaining("login failed"),
+      expect.any(String),
+    );
     client.stop();
   });
 
@@ -209,7 +267,9 @@ describe("EvccClient websocket", () => {
     await client.start();
     fetch.push("/api/state", { body: { pvPower: 2 } });
     await vi.advanceTimersByTimeAsync(1_000);
-    expect(fetch.calls.filter((c) => c.url.includes("/api/state")).length).toBeGreaterThanOrEqual(2);
+    expect(fetch.calls.filter((c) => c.url.includes("/api/state")).length).toBeGreaterThanOrEqual(
+      2,
+    );
     client.stop();
   });
 
@@ -219,7 +279,10 @@ describe("EvccClient websocket", () => {
     await client.start();
     fetch.push("/api/state", { status: 503 });
     await vi.advanceTimersByTimeAsync(1_000);
-    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining("poll failed"), expect.any(String));
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.stringContaining("poll failed"),
+      expect.any(String),
+    );
     client.stop();
   });
 

@@ -47,6 +47,7 @@ function toProps(hap: Hap, def: CharDef): CharacteristicProps {
   if (def.min !== undefined) props.minValue = def.min;
   if (def.max !== undefined) props.maxValue = def.max;
   if (def.maxLen !== undefined) props.maxLen = def.maxLen;
+  if (def.step !== undefined) props.minStep = def.step;
   return props;
 }
 

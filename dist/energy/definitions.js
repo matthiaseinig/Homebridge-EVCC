@@ -5,12 +5,12 @@
  * Two groups:
  *   - site energy (Energy Site, PV Array, Aux Meter): read-only
  *   - charging (Loadpoint Energy, Charging Statistics, control tags): read-only
- *     except Charge Mode and Set Plan, which forward writes to EVCC
+ *     except Charge Mode, Set Plan and Charge Limit, which forward writes to EVCC
  *
  * The UUIDs were generated once and are a public contract: never change or
  * reuse one. Add new entries with new UUIDs instead. The full contract,
  * including units, ranges, signs, the EVCC source field of every
- * characteristic and the charging controls, is in docs/zuhause-contract.md;
+ * characteristic and the charging controls, is in docs/app-contract.md;
  * a test renders its tables from this file.
  *
  * UUID scheme: a random suffix shared by all types of this plugin, with an
@@ -360,6 +360,19 @@ exports.CHARS = {
         source: "read: `<Plan SoC>,<Plan Time>` or empty; write: see Charging controls",
         sign: "empty = no plan",
     },
+    ChargeLimit: {
+        uuid: charUuid("0051"),
+        name: "Charge Limit",
+        format: "float",
+        unit: "%",
+        min: 0,
+        max: 100,
+        decimals: 0,
+        step: 1,
+        writable: true,
+        source: "read: `loadpoints[i].limitSoc`; write: integer 0 .. 100, see Charging controls",
+        sign: "0 means no session limit",
+    },
     // Charging: statistics (one service per EVCC statistics period).
     StatPeriod: {
         uuid: charUuid("0060"),
@@ -398,6 +411,49 @@ exports.CHARS = {
         decimals: 1,
         source: "`statistics.<period>.avgCo2`",
         sign: ">= 0",
+    },
+    // Charging: Charging History (summaries of EVCC's session log, kept by the plugin).
+    ChargedToday: {
+        uuid: charUuid("0080"),
+        name: "Charged Today",
+        ...ENERGY,
+        source: "session log: sum of `chargedEnergy` of this loadpoint's sessions that started since local midnight",
+        sign: ">= 0",
+    },
+    ChargedMonth: {
+        uuid: charUuid("0081"),
+        name: "Charged This Month",
+        ...ENERGY,
+        source: "session log: sum of `chargedEnergy` of this loadpoint's sessions that started in the current local month",
+        sign: ">= 0",
+    },
+    SolarShareMonth: {
+        uuid: charUuid("0082"),
+        name: "Solar Share This Month",
+        ...PERCENT,
+        source: "session log: energy weighted mean of `solarPercentage` over this month's sessions of this loadpoint",
+        sign: "0 when nothing was charged this month",
+    },
+    LastSessionEnergy: {
+        uuid: charUuid("0083"),
+        name: "Last Session Energy",
+        ...ENERGY,
+        source: "session log: `chargedEnergy` of the most recently finished session of this loadpoint",
+        sign: ">= 0",
+    },
+    LastSessionEnd: {
+        uuid: charUuid("0084"),
+        name: "Last Session End",
+        ...TIMESTAMP,
+        source: "session log: `finished` of the most recently finished session of this loadpoint",
+        sign: "0 = no finished session yet",
+    },
+    SessionsUpdated: {
+        uuid: charUuid("0085"),
+        name: "Sessions Updated",
+        ...TIMESTAMP,
+        source: "plugin clock when the session log was last fetched from EVCC successfully",
+        sign: "0 = not fetched yet",
     },
     // Charging: tags on control services so apps can identify them without
     // relying on service names.
@@ -479,6 +535,7 @@ exports.SERVICES = {
             "PlanActive",
             "LoadpointLastUpdate",
             "SetPlan",
+            "ChargeLimit",
         ],
     },
     ChargingStatistics: {
@@ -486,11 +543,27 @@ exports.SERVICES = {
         name: "Charging Statistics",
         chars: ["StatPeriod", "StatChargedEnergy", "StatSolarPercentage", "StatAvgPrice", "StatAvgCo2"],
     },
+    ChargingHistory: {
+        uuid: serviceUuid("0006"),
+        name: "Charging History",
+        chars: [
+            "ChargedToday",
+            "ChargedMonth",
+            "SolarShareMonth",
+            "LastSessionEnergy",
+            "LastSessionEnd",
+            "SessionsUpdated",
+        ],
+    },
 };
 /** Services that carry site energy (documented in the contract's site section). */
 exports.SITE_SERVICE_KEYS = ["EnergySite", "PvArray", "AuxMeter"];
 /** Services that carry charging data (documented in the contract's charging section). */
-exports.CHARGING_SERVICE_KEYS = ["LoadpointEnergy", "ChargingStatistics"];
+exports.CHARGING_SERVICE_KEYS = [
+    "LoadpointEnergy",
+    "ChargingStatistics",
+    "ChargingHistory",
+];
 /** Values of the Control Role characteristic, one per control service. */
 exports.CONTROL_ROLES = {
     charging: "loadpoint-charging",

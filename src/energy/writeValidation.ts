@@ -10,6 +10,17 @@ export function parseChargeMode(value: unknown): ChargeMode | undefined {
     : undefined;
 }
 
+/**
+ * Strictly parse a Charge Limit write: an integer number 0 .. 100 (0 clears the
+ * session limit in EVCC). Strings, booleans, fractions and non-finite numbers
+ * return undefined.
+ */
+export function parseChargeLimit(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 100
+    ? value
+    : undefined;
+}
+
 export type PlanRequest = { kind: "clear" } | { kind: "set"; soc: number; time: number };
 
 const PLAN_PATTERN = /^(\d{1,3}),(\d{1,10})$/;
